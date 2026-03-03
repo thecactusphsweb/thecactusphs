@@ -1,0 +1,47 @@
+{
+  "slug": "winter-2025",
+  "articles": [
+    {
+      "id": 1,
+      "title": "Colliding Spiral Galaxies Captured in Sparkling Detail",
+      "subtitle": "A stunning new image reveals the physics of galactic interactions.",
+      "author": "Meghan Bartels",
+      "date": "2025-12-31",
+      "category": "Space & Physics",
+      "type": "Long Article",
+      "tags": ["space", "astronomy"],
+      "featuredMain": true,
+      "sponsored": false,
+      "imageUrl": "articles/1/hero.jpg",
+      "contentPath": "articles/1/article.html"
+    },
+    {
+      "id": 2,
+      "title": "Here’s What to Get Excited about in Space in 2026",
+      "subtitle": "Missions, discoveries, and what to watch for next.",
+      "author": "Lee Billings",
+      "date": "2025-12-30",
+      "category": "Space Exploration",
+      "type": "Interview",
+      "tags": ["space"],
+      "featuredMain": false,
+      "sponsored": false,
+      "imageUrl": "articles/2/hero.jpg",
+      "contentPath": "articles/2/article.html"
+    },
+    {
+      "id": 3,
+      "title": "Opinion: Why Curiosity Matters",
+      "subtitle": "How asking “why” changes everything.",
+      "author": "Sunny Cui",
+      "date": "2025-12-29",
+      "category": "Opinion",
+      "type": "Opinion",
+      "tags": ["opinion"],
+      "featuredMain": false,
+      "sponsored": false,
+      "imageUrl": "articles/3/hero.jpg",
+      "contentPath": "articles/3/article.html"
+    }
+  ]
+}
