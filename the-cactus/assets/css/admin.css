@@ -106,7 +106,3 @@
   font-weight: 900;
   cursor: pointer;
 }
-
-.admin-card button:hover {
-  filter: brightness(0.98);
-}
