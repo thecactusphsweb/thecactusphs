@@ -1,1 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>The Cactus – Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="assets/css/styles.css" />
+  <link rel="stylesheet" href="assets/css/admin.css" />
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module"></script>
+  <script defer src="assets/js/admin.js" type="module"></script>
+</head>
+<body>
+  <main class="admin-shell">
+    <section class="admin-header">
+      <h1>The Cactus Admin</h1>
+      <p>Private editor dashboard</p>
+      <div id="admin-status" class="admin-status">Ready.</div>
+    </section>
 
+    <nav class="admin-tabs">
+      <button class="admin-tab active" data-tab="issues-tab">Issues</button>
+      <button class="admin-tab" data-tab="create-article-tab">Create Article</button>
+      <button class="admin-tab" data-tab="edit-articles-tab">Edit Articles</button>
+    </nav>
+
+    <section id="issues-tab" class="admin-tab-panel active">
+      <div class="admin-card">
+        <h2>Create new issue</h2>
+        <form id="issue-form">
+          <label>Issue title
+            <input type="text" name="title" placeholder="Spring 2026" required />
+          </label>
+
+          <label>Slug
+            <input type="text" name="slug" placeholder="spring-2026" required />
+          </label>
+
+          <label>Date label
+            <input type="text" name="dateLabel" placeholder="March 15, 2026" required />
+          </label>
+
+          <label>
+            <input type="checkbox" name="isCurrent" />
+            Make this the current issue
+          </label>
+
+          <label>Upload full magazine PDF
+            <input type="file" name="pdf" accept="application/pdf" required />
+          </label>
+
+          <button type="submit">Create issue</button>
+        </form>
+      </div>
+
+      <div class="admin-card">
+        <h2>Set current issue</h2>
+        <form id="current-form">
+          <label>Choose current issue
+            <select name="currentSlug" id="current-issue-select" required></select>
+          </label>
+
+          <button type="submit">Update current issue</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="create-article-tab" class="admin-tab-panel">
+      <div class="admin-card">
+        <h2>Add article</h2>
+        <form id="article-form">
+          <label>Issue
+            <select name="issueSlug" id="issue-select" required></select>
+          </label>
+
+          <label>Title
+            <input type="text" name="title" required />
+          </label>
+
+          <label>Subtitle
+            <input type="text" name="subtitle" />
+          </label>
+
+          <label>Author
+            <input type="text" name="author" required />
+          </label>
+
+          <label>Date
+            <input type="date" name="date" required />
+          </label>
+
+          <label>Category
+            <input type="text" name="category" placeholder="Space & Physics" />
+          </label>
+
+          <label>Type
+            <select name="type" required>
+              <option value="Long Article">Long Article</option>
+              <option value="Interview">Interview</option>
+              <option value="Opinion">Opinion</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
+
+          <label>Tags (comma separated)
+            <input type="text" name="tags" placeholder="space, astronomy" />
+          </label>
+
+          <label>Front page slot
+            <select name="frontPageSlot">
+              <option value="none">None</option>
+              <option value="main">Main left feature</option>
+              <option value="center-lead">Top center</option>
+              <option value="center">Center column</option>
+              <option value="right">Right column</option>
+            </select>
+          </label>
+
+          <label>Hero image
+            <input type="file" name="hero" accept="image/*" required />
+          </label>
+
+          <label>Image caption
+            <input type="text" name="imageCaption" placeholder="Caption beneath the hero image" />
+          </label>
+
+          <label>Citations HTML
+            <textarea name="citationsHtml" rows="6" placeholder="<ol><li>Source one...</li></ol>"></textarea>
+          </label>
+
+          <label>Article body HTML
+            <textarea name="bodyHtml" rows="14" placeholder="<p>Paste cleaned HTML here...</p>" required></textarea>
+          </label>
+
+          <button type="submit">Create article</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="edit-articles-tab" class="admin-tab-panel">
+      <div class="admin-card">
+        <h2>Choose article to edit</h2>
+        <form id="load-article-form">
+          <label>Issue
+            <select name="issueSlug" id="edit-issue-select" required></select>
+          </label>
+
+          <label>Article
+            <select name="articleId" id="edit-article-select" required></select>
+          </label>
+
+          <button type="submit">Load article</button>
+        </form>
+      </div>
+
+      <div class="admin-card">
+        <h2>Edit article</h2>
+        <form id="edit-article-form">
+          <input type="hidden" name="originalIssueSlug" />
+          <input type="hidden" name="articleId" />
+
+          <label>Issue
+            <select name="issueSlug" id="edit-issue-target-select" required></select>
+          </label>
+
+          <label>Title
+            <input type="text" name="title" required />
+          </label>
+
+          <label>Subtitle
+            <input type="text" name="subtitle" />
+          </label>
+
+          <label>Author
+            <input type="text" name="author" required />
+          </label>
+
+          <label>Date
+            <input type="date" name="date" required />
+          </label>
+
+          <label>Category
+            <input type="text" name="category" />
+          </label>
+
+          <label>Type
+            <select name="type" required>
+              <option value="Long Article">Long Article</option>
+              <option value="Interview">Interview</option>
+              <option value="Opinion">Opinion</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
+
+          <label>Tags (comma separated)
+            <input type="text" name="tags" />
+          </label>
+
+          <label>Front page slot
+            <select name="frontPageSlot">
+              <option value="none">None</option>
+              <option value="main">Main left feature</option>
+              <option value="center-lead">Top center</option>
+              <option value="center">Center column</option>
+              <option value="right">Right column</option>
+            </select>
+          </label>
+
+          <label>Replace hero image (optional)
+            <input type="file" name="hero" accept="image/*" />
+          </label>
+
+          <label>Image caption
+            <input type="text" name="imageCaption" />
+          </label>
+
+          <label>Citations HTML
+            <textarea name="citationsHtml" rows="6"></textarea>
+          </label>
+
+          <label>Article body HTML
+            <textarea name="bodyHtml" rows="14" required></textarea>
+          </label>
+
+          <button type="submit">Save changes</button>
+        </form>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
