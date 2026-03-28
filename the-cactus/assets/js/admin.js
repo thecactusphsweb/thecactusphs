@@ -1,5 +1,7 @@
 import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs";
 
+const API_BASE = "https://the-cactus-admin-api.thecactusphsweb.workers.dev";
+
 const statusEl = document.getElementById("admin-status");
 const issueForm = document.getElementById("issue-form");
 const articleForm = document.getElementById("article-form");
@@ -26,9 +28,7 @@ function switchTab(tabId) {
   panels.forEach((panel) => panel.classList.toggle("active", panel.id === tabId));
 }
 
-tabs.forEach((btn) => {
-  btn.addEventListener("click", () => switchTab(btn.dataset.tab));
-});
+tabs.forEach((btn) => btn.addEventListener("click", () => switchTab(btn.dataset.tab)));
 
 async function api(path, method = "GET", body = null) {
   const opts = { method, headers: {} };
@@ -36,7 +36,7 @@ async function api(path, method = "GET", body = null) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(body);
   }
-  const res = await fetch(path, opts);
+  const res = await fetch(`${API_BASE}${path}`, opts);
   const text = await res.text();
   let data = {};
   try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
@@ -45,11 +45,7 @@ async function api(path, method = "GET", body = null) {
 }
 
 function slugify(text) {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  return text.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
 async function fileToBase64(file) {
@@ -139,7 +135,6 @@ issueForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   try {
     setStatus("Creating issue…");
-
     const fd = new FormData(issueForm);
     const pdf = fd.get("pdf");
     if (!(pdf instanceof File) || !pdf.size) throw new Error("Please upload a PDF.");
@@ -167,16 +162,11 @@ articleForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   try {
     setStatus("Creating article…");
-
     const fd = new FormData(articleForm);
     const hero = fd.get("hero");
     if (!(hero instanceof File) || !hero.size) throw new Error("Please upload a hero image.");
 
-    const tags = String(fd.get("tags") || "")
-      .split(",")
-      .map((x) => x.trim())
-      .filter(Boolean);
-
+    const tags = String(fd.get("tags") || "").split(",").map((x) => x.trim()).filter(Boolean);
     const slot = String(fd.get("frontPageSlot") || "none");
 
     const payload = {
@@ -259,13 +249,9 @@ editArticleForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   try {
     setStatus("Saving article…");
-
     const fd = new FormData(editArticleForm);
     const hero = fd.get("hero");
-    const tags = String(fd.get("tags") || "")
-      .split(",")
-      .map((x) => x.trim())
-      .filter(Boolean);
+    const tags = String(fd.get("tags") || "").split(",").map((x) => x.trim()).filter(Boolean);
 
     const payload = {
       originalIssueSlug: fd.get("originalIssueSlug"),
