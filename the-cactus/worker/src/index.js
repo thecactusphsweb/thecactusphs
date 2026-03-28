@@ -1,6 +1,20 @@
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "content-type": "application/json; charset=utf-8"
+};
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        status: 204,
+        headers: CORS_HEADERS
+      });
+    }
 
     try {
       if (url.pathname === "/api/issues" && request.method === "GET") {
@@ -48,7 +62,7 @@ export default {
 function json(data, status = 200) {
   return new Response(JSON.stringify(data, null, 2), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8" }
+    headers: CORS_HEADERS
   });
 }
 
@@ -65,6 +79,25 @@ function b64FromUtf8(text) {
   let binary = "";
   for (const b of bytes) binary += String.fromCharCode(b);
   return btoa(binary);
+}
+
+function textToStoredHtml(text) {
+  const clean = String(text || "").trim();
+  if (!clean) return "";
+
+  return clean
+    .split(/\n\s*\n/)
+    .map((para) => `<p>${escapeHtml(para).replace(/\n/g, "<br>")}</p>`)
+    .join("\n\n");
+}
+
+function escapeHtml(str) {
+  return String(str || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 async function githubGetContent(env, path) {
@@ -202,13 +235,13 @@ async function createArticle(env, body) {
     featuredMain,
     sponsored,
     imageCaption,
-    citationsHtml,
-    bodyHtml,
+    citationsText,
+    bodyText,
     heroBase64,
     heroExtension
   } = body;
 
-  if (!issueSlug || !title || !author || !date || !type || !bodyHtml || !heroBase64) {
+  if (!issueSlug || !title || !author || !date || !type || !bodyText || !heroBase64) {
     throw new Error("Missing required article fields.");
   }
 
@@ -237,7 +270,7 @@ async function createArticle(env, body) {
     imageUrl: `articles/${nextId}/hero.${ext}`,
     imageCaption: imageCaption || "",
     contentPath: `articles/${nextId}/article.html`,
-    citationsHtml: citationsHtml || ""
+    citationsText: citationsText || ""
   };
 
   articles.push(articleObject);
@@ -252,7 +285,7 @@ async function createArticle(env, body) {
   await writeFileToGitHub(
     env,
     `issues/${issueSlug}/articles/${nextId}/article.html`,
-    b64FromUtf8(bodyHtml),
+    b64FromUtf8(textToStoredHtml(bodyText)),
     `Create article body for article ${nextId} in ${issueSlug}`
   );
 
@@ -282,8 +315,8 @@ async function updateArticle(env, body) {
     featuredMain,
     sponsored,
     imageCaption,
-    citationsHtml,
-    bodyHtml,
+    citationsText,
+    bodyText,
     heroBase64,
     heroExtension
   } = body;
@@ -329,7 +362,7 @@ async function updateArticle(env, body) {
     imageUrl: `articles/${articleId}/hero.${ext}`,
     imageCaption: imageCaption || "",
     contentPath: `articles/${articleId}/article.html`,
-    citationsHtml: citationsHtml || ""
+    citationsText: citationsText || ""
   };
 
   if (heroBase64) {
@@ -344,7 +377,7 @@ async function updateArticle(env, body) {
   await writeFileToGitHub(
     env,
     `issues/${issueSlug}/articles/${articleId}/article.html`,
-    b64FromUtf8(bodyHtml),
+    b64FromUtf8(textToStoredHtml(bodyText)),
     `Update article body for article ${articleId} in ${issueSlug}`
   );
 
