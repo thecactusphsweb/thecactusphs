@@ -15,6 +15,9 @@ const editIssueSelect = document.getElementById("edit-issue-select");
 const editIssueTargetSelect = document.getElementById("edit-issue-target-select");
 const editArticleSelect = document.getElementById("edit-article-select");
 
+const createPreview = document.getElementById("create-preview");
+const editPreview = document.getElementById("edit-preview");
+
 const tabs = document.querySelectorAll(".admin-tab");
 const panels = document.querySelectorAll(".admin-tab-panel");
 
@@ -36,6 +39,7 @@ async function api(path, method = "GET", body = null) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(body);
   }
+
   const res = await fetch(`${API_BASE}${path}`, opts);
   const text = await res.text();
   let data = {};
@@ -77,6 +81,99 @@ async function extractFirstPdfPageAsJpegBase64(file) {
       resolve(base64);
     }, "image/jpeg", 0.92);
   });
+}
+
+function escapeHtml(str) {
+  return String(str || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function textToParagraphHtml(text) {
+  const clean = String(text || "").trim();
+  if (!clean) return "<p></p>";
+
+  return clean
+    .split(/\n\s*\n/)
+    .map((para) => `<p>${escapeHtml(para).replace(/\n/g, "<br>")}</p>`)
+    .join("");
+}
+
+function renderPreview(targetEl, data, imageUrl = "") {
+  const bodyHtml = textToParagraphHtml(data.bodyText || "");
+  const citations = String(data.citationsText || "").trim();
+
+  targetEl.innerHTML = `
+    <article class="preview-article">
+      <div class="preview-breadcrumb">Current Issue • Preview</div>
+      <h1 class="preview-title">${escapeHtml(data.title || "Article title")}</h1>
+      ${data.subtitle ? `<div class="preview-subtitle">${escapeHtml(data.subtitle)}</div>` : ""}
+      <div class="preview-meta">
+        ${escapeHtml(data.author || "Author")} · ${escapeHtml(data.date || "Date")} · ${escapeHtml(data.category || "Category")}
+      </div>
+
+      ${imageUrl ? `<img class="preview-image" src="${imageUrl}" alt="Preview image">` : ""}
+
+      ${data.imageCaption ? `<div class="preview-caption">${escapeHtml(data.imageCaption)}</div>` : ""}
+
+      <div class="preview-body">${bodyHtml}</div>
+
+      ${citations ? `
+        <section class="preview-citations">
+          <h3>Citations</h3>
+          <div class="preview-citations-text">${escapeHtml(citations)}</div>
+        </section>
+      ` : ""}
+    </article>
+  `;
+}
+
+function getFormDataForPreview(form) {
+  const fd = new FormData(form);
+  return {
+    title: fd.get("title") || "",
+    subtitle: fd.get("subtitle") || "",
+    author: fd.get("author") || "",
+    date: fd.get("date") || "",
+    category: fd.get("category") || "",
+    imageCaption: fd.get("imageCaption") || "",
+    bodyText: fd.get("bodyText") || "",
+    citationsText: fd.get("citationsText") || ""
+  };
+}
+
+function bindLivePreview(form, previewEl) {
+  let currentImageUrl = "";
+
+  const update = () => {
+    renderPreview(previewEl, getFormDataForPreview(form), currentImageUrl);
+  };
+
+  form.addEventListener("input", update);
+
+  const imageInput = form.querySelector('input[name="hero"]');
+  if (imageInput) {
+    imageInput.addEventListener("change", () => {
+      const file = imageInput.files?.[0];
+      if (file) {
+        currentImageUrl = URL.createObjectURL(file);
+      }
+      update();
+    });
+  }
+
+  update();
+
+  return {
+    setImageUrl(url) {
+      currentImageUrl = url || "";
+      update();
+    },
+    update
+  };
 }
 
 let issuesCache = [];
@@ -131,6 +228,9 @@ editIssueSelect.addEventListener("change", async () => {
   await refreshArticlesForIssue(editIssueSelect.value);
 });
 
+const createPreviewController = bindLivePreview(articleForm, createPreview);
+const editPreviewController = bindLivePreview(editArticleForm, editPreview);
+
 issueForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   try {
@@ -182,14 +282,15 @@ articleForm.addEventListener("submit", async (e) => {
       featuredMain: slot === "main",
       sponsored: false,
       imageCaption: fd.get("imageCaption"),
-      citationsHtml: fd.get("citationsHtml"),
-      bodyHtml: fd.get("bodyHtml"),
+      citationsText: fd.get("citationsText"),
+      bodyText: fd.get("bodyText"),
       heroBase64: await fileToBase64(hero),
       heroExtension: hero.name.split(".").pop()?.toLowerCase() || "jpg"
     };
 
     await api("/api/articles", "POST", payload);
     articleForm.reset();
+    createPreviewController.setImageUrl("");
     await refreshIssues();
     setStatus("Article created.");
   } catch (err) {
@@ -232,11 +333,14 @@ loadArticleForm.addEventListener("submit", async (e) => {
     editArticleForm.elements.tags.value = (article.tags || []).join(", ");
     editArticleForm.elements.frontPageSlot.value = article.frontPageSlot || "none";
     editArticleForm.elements.imageCaption.value = article.imageCaption || "";
-    editArticleForm.elements.citationsHtml.value = article.citationsHtml || "";
+    editArticleForm.elements.citationsText.value = article.citationsText || "";
 
     const res = await fetch(`issues/${issueSlug}/articles/${article.id}/article.html`);
     if (!res.ok) throw new Error("Could not load article body.");
-    editArticleForm.elements.bodyHtml.value = await res.text();
+    editArticleForm.elements.bodyText.value = await res.text();
+
+    editPreviewController.setImageUrl(`issues/${issueSlug}/articles/${article.id}/${article.imageUrl.split("/").pop()}`);
+    editPreviewController.update();
 
     switchTab("edit-articles-tab");
     setStatus("Article loaded.");
@@ -268,8 +372,8 @@ editArticleForm.addEventListener("submit", async (e) => {
       featuredMain: fd.get("frontPageSlot") === "main",
       sponsored: false,
       imageCaption: fd.get("imageCaption"),
-      citationsHtml: fd.get("citationsHtml"),
-      bodyHtml: fd.get("bodyHtml")
+      citationsText: fd.get("citationsText"),
+      bodyText: fd.get("bodyText")
     };
 
     if (hero instanceof File && hero.size) {
