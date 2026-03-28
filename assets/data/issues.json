@@ -1,2 +1,9 @@
 [
+  {
+    "slug": "winter-2026test",
+    "title": "Winter 2026test",
+    "dateLabel": "January 7, 2026",
+    "coverImage": "issues/winter-2026test/cover.jpg",
+    "isCurrent": true
+  }
 ]
