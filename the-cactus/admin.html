@@ -13,7 +13,7 @@
   <main class="admin-shell">
     <section class="admin-header">
       <h1>The Cactus Admin</h1>
-      <p>Private editor dashboard</p>
+      <p>Upload issues and articles here.</p>
       <div id="admin-status" class="admin-status">Ready.</div>
     </section>
 
@@ -30,24 +30,19 @@
           <label>Issue title
             <input type="text" name="title" placeholder="Spring 2026" required />
           </label>
-
           <label>Slug
             <input type="text" name="slug" placeholder="spring-2026" required />
           </label>
-
           <label>Date label
             <input type="text" name="dateLabel" placeholder="March 15, 2026" required />
           </label>
-
           <label>
             <input type="checkbox" name="isCurrent" />
             Make this the current issue
           </label>
-
           <label>Upload full magazine PDF
             <input type="file" name="pdf" accept="application/pdf" required />
           </label>
-
           <button type="submit">Create issue</button>
         </form>
       </div>
@@ -58,7 +53,6 @@
           <label>Choose current issue
             <select name="currentSlug" id="current-issue-select" required></select>
           </label>
-
           <button type="submit">Update current issue</button>
         </form>
       </div>
@@ -71,27 +65,21 @@
           <label>Issue
             <select name="issueSlug" id="issue-select" required></select>
           </label>
-
           <label>Title
             <input type="text" name="title" required />
           </label>
-
           <label>Subtitle
             <input type="text" name="subtitle" />
           </label>
-
           <label>Author
             <input type="text" name="author" required />
           </label>
-
           <label>Date
             <input type="date" name="date" required />
           </label>
-
           <label>Category
-            <input type="text" name="category" placeholder="Space & Physics" />
+            <input type="text" name="category" />
           </label>
-
           <label>Type
             <select name="type" required>
               <option value="Long Article">Long Article</option>
@@ -100,11 +88,9 @@
               <option value="Other">Other</option>
             </select>
           </label>
-
           <label>Tags (comma separated)
-            <input type="text" name="tags" placeholder="space, astronomy" />
+            <input type="text" name="tags" />
           </label>
-
           <label>Front page slot
             <select name="frontPageSlot">
               <option value="none">None</option>
@@ -114,23 +100,18 @@
               <option value="right">Right column</option>
             </select>
           </label>
-
           <label>Hero image
             <input type="file" name="hero" accept="image/*" required />
           </label>
-
           <label>Image caption
-            <input type="text" name="imageCaption" placeholder="Caption beneath the hero image" />
+            <input type="text" name="imageCaption" />
           </label>
-
           <label>Citations HTML
-            <textarea name="citationsHtml" rows="6" placeholder="<ol><li>Source one...</li></ol>"></textarea>
+            <textarea name="citationsHtml" rows="6"></textarea>
           </label>
-
           <label>Article body HTML
-            <textarea name="bodyHtml" rows="14" placeholder="<p>Paste cleaned HTML here...</p>" required></textarea>
+            <textarea name="bodyHtml" rows="14" required></textarea>
           </label>
-
           <button type="submit">Create article</button>
         </form>
       </div>
@@ -143,11 +124,9 @@
           <label>Issue
             <select name="issueSlug" id="edit-issue-select" required></select>
           </label>
-
           <label>Article
             <select name="articleId" id="edit-article-select" required></select>
           </label>
-
           <button type="submit">Load article</button>
         </form>
       </div>
@@ -157,31 +136,24 @@
         <form id="edit-article-form">
           <input type="hidden" name="originalIssueSlug" />
           <input type="hidden" name="articleId" />
-
           <label>Issue
             <select name="issueSlug" id="edit-issue-target-select" required></select>
           </label>
-
           <label>Title
             <input type="text" name="title" required />
           </label>
-
           <label>Subtitle
             <input type="text" name="subtitle" />
           </label>
-
           <label>Author
             <input type="text" name="author" required />
           </label>
-
           <label>Date
             <input type="date" name="date" required />
           </label>
-
           <label>Category
             <input type="text" name="category" />
           </label>
-
           <label>Type
             <select name="type" required>
               <option value="Long Article">Long Article</option>
@@ -190,11 +162,9 @@
               <option value="Other">Other</option>
             </select>
           </label>
-
           <label>Tags (comma separated)
             <input type="text" name="tags" />
           </label>
-
           <label>Front page slot
             <select name="frontPageSlot">
               <option value="none">None</option>
@@ -204,23 +174,18 @@
               <option value="right">Right column</option>
             </select>
           </label>
-
           <label>Replace hero image (optional)
             <input type="file" name="hero" accept="image/*" />
           </label>
-
           <label>Image caption
             <input type="text" name="imageCaption" />
           </label>
-
           <label>Citations HTML
             <textarea name="citationsHtml" rows="6"></textarea>
           </label>
-
           <label>Article body HTML
             <textarea name="bodyHtml" rows="14" required></textarea>
           </label>
-
           <button type="submit">Save changes</button>
         </form>
       </div>
