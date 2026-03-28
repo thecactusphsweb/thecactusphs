@@ -1,8 +1,3 @@
-import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs";
-
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs";
-
 const API_BASE = "https://the-cactus-admin-api.thecactusphsweb.workers.dev";
 
 const statusEl = document.getElementById("admin-status");
@@ -38,6 +33,7 @@ tabs.forEach((btn) => btn.addEventListener("click", () => switchTab(btn.dataset.
 
 async function api(path, method = "GET", body = null) {
   const opts = { method, headers: {} };
+
   if (body) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(body);
@@ -45,8 +41,14 @@ async function api(path, method = "GET", body = null) {
 
   const res = await fetch(`${API_BASE}${path}`, opts);
   const text = await res.text();
+
   let data = {};
-  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { raw: text };
+  }
+
   if (!res.ok) throw new Error(data.error || `Request failed: ${res.status}`);
   return data;
 }
@@ -61,29 +63,6 @@ async function fileToBase64(file) {
   let binary = "";
   for (const b of bytes) binary += String.fromCharCode(b);
   return btoa(binary);
-}
-
-async function extractFirstPdfPageAsJpegBase64(file) {
-  const buf = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-  const page = await pdf.getPage(1);
-
-  const viewport = page.getViewport({ scale: 1.8 });
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-
-  canvas.width = viewport.width;
-  canvas.height = viewport.height;
-
-  await page.render({ canvasContext: ctx, viewport }).promise;
-
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(async (blob) => {
-      if (!blob) return reject(new Error("Could not create cover image from PDF"));
-      const base64 = await fileToBase64(new File([blob], "cover.jpg", { type: "image/jpeg" }));
-      resolve(base64);
-    }, "image/jpeg", 0.92);
-  });
 }
 
 function escapeHtml(str) {
@@ -201,6 +180,8 @@ async function refreshIssues() {
 
   if (issuesCache.length) {
     await refreshArticlesForIssue(editIssueSelect.value || issuesCache[0].slug);
+  } else {
+    editArticleSelect.innerHTML = "";
   }
 }
 
@@ -228,6 +209,7 @@ issueForm.querySelector('input[name="slug"]').addEventListener("input", (e) => {
 });
 
 editIssueSelect.addEventListener("change", async () => {
+  if (!editIssueSelect.value) return;
   await refreshArticlesForIssue(editIssueSelect.value);
 });
 
@@ -239,17 +221,19 @@ issueForm.addEventListener("submit", async (e) => {
   try {
     setStatus("Creating issue…");
     const fd = new FormData(issueForm);
-    const pdf = fd.get("pdf");
-    if (!(pdf instanceof File) || !pdf.size) throw new Error("Please upload a PDF.");
+    const cover = fd.get("cover");
+
+    if (!(cover instanceof File) || !cover.size) {
+      throw new Error("Please upload a cover image.");
+    }
 
     const payload = {
       title: fd.get("title"),
       slug: fd.get("slug"),
       dateLabel: fd.get("dateLabel"),
       isCurrent: fd.get("isCurrent") === "on",
-      pdfBase64: await fileToBase64(pdf),
-      pdfFilename: "magazine.pdf",
-      coverBase64: await extractFirstPdfPageAsJpegBase64(pdf)
+      coverBase64: await fileToBase64(cover),
+      coverExtension: cover.name.split(".").pop()?.toLowerCase() || "jpg"
     };
 
     await api("/api/issues", "POST", payload);
@@ -386,7 +370,9 @@ editArticleForm.addEventListener("submit", async (e) => {
 
     await api("/api/articles/update", "POST", payload);
     await refreshIssues();
-    await refreshArticlesForIssue(editIssueSelect.value);
+    if (editIssueSelect.value) {
+      await refreshArticlesForIssue(editIssueSelect.value);
+    }
     setStatus("Article updated.");
   } catch (err) {
     setStatus(err.message, true);

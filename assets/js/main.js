@@ -329,6 +329,28 @@ async function loadAllArticlesAcrossIssues(issues) {
   return all;
 }
 
+function renderIssuePdfCard(issueMeta) {
+  const pdfUrl = issueMeta.pdfUrl || `issues/${issueMeta.slug}/magazine.pdf`;
+  const coverUrl = issueMeta.coverImage || `issues/${issueMeta.slug}/cover.jpg`;
+
+  return `
+    <section class="issue-pdf-section">
+      <h3 class="article-section-title">Full Magazine</h3>
+      <a class="issue-pdf-card" href="${pdfUrl}" target="_blank" rel="noopener noreferrer">
+        <div class="issue-pdf-cover-wrap">
+          <img class="issue-pdf-cover" src="${coverUrl}" alt="${escapeHtml(issueMeta.title)} PDF cover">
+        </div>
+        <div class="issue-pdf-content">
+          <div class="issue-pdf-label">View PDF Version of the Magazine</div>
+          <div class="issue-pdf-title">${escapeHtml(issueMeta.title)}</div>
+          <div class="issue-pdf-meta">${escapeHtml(issueMeta.dateLabel || "")}</div>
+          <div class="issue-pdf-button">Open PDF</div>
+        </div>
+      </a>
+    </section>
+  `;
+}
+
 function renderIssueArticles(issueMeta, issueArticles, query, allArticlesForSearch) {
   const headerTitle = document.getElementById("issue-title");
   const headerMeta = document.getElementById("issue-meta");
@@ -370,6 +392,8 @@ function renderIssueArticles(issueMeta, issueArticles, query, allArticlesForSear
     `;
     container.appendChild(section);
   });
+
+  container.insertAdjacentHTML("beforeend", renderIssuePdfCard(issueMeta));
 }
 
 async function renderCurrentIssuePage() {

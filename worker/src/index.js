@@ -147,9 +147,9 @@ async function writeFileToGitHub(env, path, base64Content, message) {
 }
 
 async function createIssue(env, body) {
-  const { title, slug, dateLabel, isCurrent, pdfBase64, coverBase64 } = body;
+  const { title, slug, dateLabel, isCurrent, coverBase64, coverExtension } = body;
 
-  if (!title || !slug || !dateLabel || !pdfBase64 || !coverBase64) {
+  if (!title || !slug || !dateLabel || !coverBase64) {
     throw new Error("Missing required issue fields.");
   }
 
@@ -161,11 +161,19 @@ async function createIssue(env, body) {
 
   if (isCurrent) issues.forEach((x) => { x.isCurrent = false; });
 
+  const ext = String(coverExtension || "jpg")
+    .replace(/[^a-z0-9]/gi, "")
+    .toLowerCase() || "jpg";
+
+  const coverPath = `issues/${slug}/cover.${ext}`;
+  const pdfPath = `issues/${slug}/magazine.pdf`;
+
   issues.unshift({
     slug,
     title,
     dateLabel,
-    coverImage: `issues/${slug}/cover.jpg`,
+    coverImage: coverPath,
+    pdfUrl: pdfPath,
     isCurrent: !!isCurrent
   });
 
@@ -178,14 +186,7 @@ async function createIssue(env, body) {
 
   await writeFileToGitHub(
     env,
-    `issues/${slug}/magazine.pdf`,
-    pdfBase64,
-    `Upload magazine PDF for ${slug}`
-  );
-
-  await writeFileToGitHub(
-    env,
-    `issues/${slug}/cover.jpg`,
+    coverPath,
     coverBase64,
     `Upload cover image for ${slug}`
   );

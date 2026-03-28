@@ -43,9 +43,14 @@
             <span>Make this the current issue</span>
           </label>
 
-          <label>Upload full magazine PDF
-            <input type="file" name="pdf" accept="application/pdf" required />
+          <label>Upload cover image
+            <input type="file" name="cover" accept="image/*" required />
           </label>
+
+          <p class="muted">
+            After creating the issue, add the full PDF manually at
+            <code>issues/&lt;slug&gt;/magazine.pdf</code>.
+          </p>
 
           <button type="submit">Create issue</button>
         </form>
