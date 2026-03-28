@@ -1,0 +1,303 @@
+import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs";
+
+const statusEl = document.getElementById("admin-status");
+const issueForm = document.getElementById("issue-form");
+const articleForm = document.getElementById("article-form");
+const currentForm = document.getElementById("current-form");
+const loadArticleForm = document.getElementById("load-article-form");
+const editArticleForm = document.getElementById("edit-article-form");
+
+const issueSelect = document.getElementById("issue-select");
+const currentIssueSelect = document.getElementById("current-issue-select");
+const editIssueSelect = document.getElementById("edit-issue-select");
+const editIssueTargetSelect = document.getElementById("edit-issue-target-select");
+const editArticleSelect = document.getElementById("edit-article-select");
+
+const tabs = document.querySelectorAll(".admin-tab");
+const panels = document.querySelectorAll(".admin-tab-panel");
+
+function setStatus(message, isError = false) {
+  statusEl.textContent = message;
+  statusEl.style.color = isError ? "#9b1c1c" : "";
+}
+
+function switchTab(tabId) {
+  tabs.forEach((btn) => btn.classList.toggle("active", btn.dataset.tab === tabId));
+  panels.forEach((panel) => panel.classList.toggle("active", panel.id === tabId));
+}
+
+tabs.forEach((btn) => {
+  btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+});
+
+async function api(path, method = "GET", body = null) {
+  const opts = { method, headers: {} };
+  if (body) {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(path, opts);
+  const text = await res.text();
+  let data = {};
+  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+  if (!res.ok) throw new Error(data.error || `Request failed: ${res.status}`);
+  return data;
+}
+
+function slugify(text) {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+async function fileToBase64(file) {
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
+
+async function extractFirstPdfPageAsJpegBase64(file) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const page = await pdf.getPage(1);
+
+  const viewport = page.getViewport({ scale: 1.8 });
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+
+  await page.render({ canvasContext: ctx, viewport }).promise;
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(async (blob) => {
+      if (!blob) return reject(new Error("Could not create cover image from PDF"));
+      const base64 = await fileToBase64(new File([blob], "cover.jpg", { type: "image/jpeg" }));
+      resolve(base64);
+    }, "image/jpeg", 0.92);
+  });
+}
+
+let issuesCache = [];
+let issueArticlesCache = new Map();
+
+async function refreshIssues() {
+  const data = await api("/api/issues");
+  issuesCache = data.issues || [];
+
+  for (const select of [issueSelect, currentIssueSelect, editIssueSelect, editIssueTargetSelect]) {
+    select.innerHTML = "";
+    issuesCache.forEach((issue) => {
+      const opt = document.createElement("option");
+      opt.value = issue.slug;
+      opt.textContent = `${issue.title}${issue.isCurrent ? " (current)" : ""}`;
+      select.appendChild(opt);
+    });
+  }
+
+  const current = issuesCache.find((x) => x.isCurrent);
+  if (current) currentIssueSelect.value = current.slug;
+
+  if (issuesCache.length) {
+    await refreshArticlesForIssue(editIssueSelect.value || issuesCache[0].slug);
+  }
+}
+
+async function refreshArticlesForIssue(issueSlug) {
+  const data = await api(`/api/issues/${encodeURIComponent(issueSlug)}`);
+  const articles = data.articles || [];
+  issueArticlesCache.set(issueSlug, articles);
+
+  editArticleSelect.innerHTML = "";
+  articles.forEach((article) => {
+    const opt = document.createElement("option");
+    opt.value = String(article.id);
+    opt.textContent = `${article.id} — ${article.title}`;
+    editArticleSelect.appendChild(opt);
+  });
+}
+
+issueForm.querySelector('input[name="title"]').addEventListener("input", (e) => {
+  const slugInput = issueForm.querySelector('input[name="slug"]');
+  if (!slugInput.dataset.manual) slugInput.value = slugify(e.target.value);
+});
+
+issueForm.querySelector('input[name="slug"]').addEventListener("input", (e) => {
+  e.target.dataset.manual = "1";
+});
+
+editIssueSelect.addEventListener("change", async () => {
+  await refreshArticlesForIssue(editIssueSelect.value);
+});
+
+issueForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    setStatus("Creating issue…");
+
+    const fd = new FormData(issueForm);
+    const pdf = fd.get("pdf");
+    if (!(pdf instanceof File) || !pdf.size) throw new Error("Please upload a PDF.");
+
+    const payload = {
+      title: fd.get("title"),
+      slug: fd.get("slug"),
+      dateLabel: fd.get("dateLabel"),
+      isCurrent: fd.get("isCurrent") === "on",
+      pdfBase64: await fileToBase64(pdf),
+      pdfFilename: "magazine.pdf",
+      coverBase64: await extractFirstPdfPageAsJpegBase64(pdf)
+    };
+
+    await api("/api/issues", "POST", payload);
+    issueForm.reset();
+    await refreshIssues();
+    setStatus("Issue created.");
+  } catch (err) {
+    setStatus(err.message, true);
+  }
+});
+
+articleForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    setStatus("Creating article…");
+
+    const fd = new FormData(articleForm);
+    const hero = fd.get("hero");
+    if (!(hero instanceof File) || !hero.size) throw new Error("Please upload a hero image.");
+
+    const tags = String(fd.get("tags") || "")
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
+
+    const slot = String(fd.get("frontPageSlot") || "none");
+
+    const payload = {
+      issueSlug: fd.get("issueSlug"),
+      title: fd.get("title"),
+      subtitle: fd.get("subtitle"),
+      author: fd.get("author"),
+      date: fd.get("date"),
+      category: fd.get("category"),
+      type: fd.get("type"),
+      tags,
+      frontPageSlot: slot,
+      featuredMain: slot === "main",
+      sponsored: false,
+      imageCaption: fd.get("imageCaption"),
+      citationsHtml: fd.get("citationsHtml"),
+      bodyHtml: fd.get("bodyHtml"),
+      heroBase64: await fileToBase64(hero),
+      heroExtension: hero.name.split(".").pop()?.toLowerCase() || "jpg"
+    };
+
+    await api("/api/articles", "POST", payload);
+    articleForm.reset();
+    await refreshIssues();
+    setStatus("Article created.");
+  } catch (err) {
+    setStatus(err.message, true);
+  }
+});
+
+currentForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    setStatus("Updating current issue…");
+    const fd = new FormData(currentForm);
+    await api("/api/issues/current", "POST", { slug: fd.get("currentSlug") });
+    await refreshIssues();
+    setStatus("Current issue updated.");
+  } catch (err) {
+    setStatus(err.message, true);
+  }
+});
+
+loadArticleForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    const fd = new FormData(loadArticleForm);
+    const issueSlug = fd.get("issueSlug");
+    const articleId = Number(fd.get("articleId"));
+    const articles = issueArticlesCache.get(issueSlug) || [];
+    const article = articles.find((a) => Number(a.id) === articleId);
+    if (!article) throw new Error("Article not found.");
+
+    editArticleForm.elements.originalIssueSlug.value = issueSlug;
+    editArticleForm.elements.articleId.value = String(article.id);
+    editIssueTargetSelect.value = issueSlug;
+    editArticleForm.elements.title.value = article.title || "";
+    editArticleForm.elements.subtitle.value = article.subtitle || "";
+    editArticleForm.elements.author.value = article.author || "";
+    editArticleForm.elements.date.value = article.date || "";
+    editArticleForm.elements.category.value = article.category || "";
+    editArticleForm.elements.type.value = article.type || "Long Article";
+    editArticleForm.elements.tags.value = (article.tags || []).join(", ");
+    editArticleForm.elements.frontPageSlot.value = article.frontPageSlot || "none";
+    editArticleForm.elements.imageCaption.value = article.imageCaption || "";
+    editArticleForm.elements.citationsHtml.value = article.citationsHtml || "";
+
+    const res = await fetch(`issues/${issueSlug}/articles/${article.id}/article.html`);
+    if (!res.ok) throw new Error("Could not load article body.");
+    editArticleForm.elements.bodyHtml.value = await res.text();
+
+    switchTab("edit-articles-tab");
+    setStatus("Article loaded.");
+  } catch (err) {
+    setStatus(err.message, true);
+  }
+});
+
+editArticleForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    setStatus("Saving article…");
+
+    const fd = new FormData(editArticleForm);
+    const hero = fd.get("hero");
+    const tags = String(fd.get("tags") || "")
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
+
+    const payload = {
+      originalIssueSlug: fd.get("originalIssueSlug"),
+      issueSlug: fd.get("issueSlug"),
+      articleId: Number(fd.get("articleId")),
+      title: fd.get("title"),
+      subtitle: fd.get("subtitle"),
+      author: fd.get("author"),
+      date: fd.get("date"),
+      category: fd.get("category"),
+      type: fd.get("type"),
+      tags,
+      frontPageSlot: fd.get("frontPageSlot"),
+      featuredMain: fd.get("frontPageSlot") === "main",
+      sponsored: false,
+      imageCaption: fd.get("imageCaption"),
+      citationsHtml: fd.get("citationsHtml"),
+      bodyHtml: fd.get("bodyHtml")
+    };
+
+    if (hero instanceof File && hero.size) {
+      payload.heroBase64 = await fileToBase64(hero);
+      payload.heroExtension = hero.name.split(".").pop()?.toLowerCase() || "jpg";
+    }
+
+    await api("/api/articles/update", "POST", payload);
+    await refreshIssues();
+    await refreshArticlesForIssue(editIssueSelect.value);
+    setStatus("Article updated.");
+  } catch (err) {
+    setStatus(err.message, true);
+  }
+});
+
+refreshIssues().catch((err) => setStatus(err.message, true));
