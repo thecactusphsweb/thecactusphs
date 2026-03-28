@@ -456,10 +456,10 @@ async function renderArticlePage() {
 
       <div class="article-body"><p>Loading…</p></div>
 
-      ${article.citationsHtml ? `
+      ${article.citationsText ? `
         <section class="article-citations" style="margin-top:2rem;">
           <h2 style="font-size:1.1rem; margin-bottom:0.5rem;">Citations</h2>
-          <div class="article-citations-body">${article.citationsHtml}</div>
+          <div class="article-citations-body" style="white-space: pre-wrap; line-height: 1.6;">${escapeHtml(article.citationsText)}</div>
         </section>
       ` : ""}
     </div>
