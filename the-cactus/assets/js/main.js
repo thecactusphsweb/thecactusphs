@@ -1,12 +1,6 @@
 /* =========================================================
-   The Cactus — assets/js/main.js
-   Option B (one folder per issue)
-   Full file (copy/paste)
+   The Cactus — public site
    ========================================================= */
-
-/* =========================
-   0) Shared header/footer loader
-   ========================= */
 
 async function loadPartials() {
   const headerMount = document.getElementById("header-mount");
@@ -46,10 +40,6 @@ function showPageError(message) {
   el.style.background = "rgba(255,255,255,0.9)";
 }
 
-/* =========================
-   1) Helpers
-   ========================= */
-
 function getQueryParam(name) {
   const params = new URLSearchParams(window.location.search);
   const v = params.get(name);
@@ -72,16 +62,16 @@ function escapeHtml(s) {
 function formatDate(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function sortByDateDesc(list) {
   return [...list].sort((a, b) => new Date(b.date) - new Date(a.date));
 }
-
-/* =========================
-   2) Data loading (Option B)
-   ========================= */
 
 async function fetchJson(path) {
   const res = await fetch(path);
@@ -100,8 +90,6 @@ async function loadIssueData(slug) {
   window.__CACTUS_ISSUE_CACHE__ = window.__CACTUS_ISSUE_CACHE__ || {};
   if (window.__CACTUS_ISSUE_CACHE__[slug]) return window.__CACTUS_ISSUE_CACHE__[slug];
 
-  // Each issue lives here:
-  // issues/<slug>/issue.json
   const data = await fetchJson(`issues/${slug}/issue.json`);
   const articles = Array.isArray(data.articles) ? data.articles : [];
   window.__CACTUS_ISSUE_CACHE__[slug] = { slug: data.slug || slug, articles };
@@ -112,13 +100,7 @@ function getCurrentIssueFromList(issues) {
   return issues.find((i) => i.isCurrent) || issues[0];
 }
 
-/* =========================
-   3) Path normalization (so JSON stays clean)
-   ========================= */
-
 function normalizeArticlePaths(issueSlug, article) {
-  // If JSON uses paths like "articles/1/hero.jpg",
-  // we turn them into "issues/<slug>/articles/1/hero.jpg"
   const prefix = `issues/${issueSlug}/`;
 
   const fix = (p) => {
@@ -137,10 +119,6 @@ function normalizeArticlePaths(issueSlug, article) {
   };
 }
 
-/* =========================
-   4) URLs
-   ========================= */
-
 function articleUrl(articleId, issueSlug) {
   return `article.html?id=${encodeURIComponent(articleId)}&issue=${encodeURIComponent(issueSlug)}`;
 }
@@ -148,10 +126,6 @@ function articleUrl(articleId, issueSlug) {
 function authorUrl(authorName) {
   return `authors.html?author=${encodeURIComponent(authorName)}`;
 }
-
-/* =========================
-   5) Header init
-   ========================= */
 
 function initHeader() {
   const dateEl = document.getElementById("header-date");
@@ -169,17 +143,21 @@ function initHeader() {
   if (input && q) input.value = q;
 }
 
-/* =========================
-   6) Search
-   ========================= */
-
 function searchArticlesInList(query, articles) {
   const q = normalize(query);
   if (!q) return [];
 
   return articles
     .map((a) => {
-      const hay = [a.title, a.subtitle, a.author, a.category, a.type, ...(a.tags || [])]
+      const hay = [
+        a.title,
+        a.subtitle,
+        a.author,
+        a.category,
+        a.type,
+        a.imageCaption,
+        ...(a.tags || []),
+      ]
         .map(normalize)
         .join(" | ");
 
@@ -206,15 +184,12 @@ function renderSearchSummary(container, query, count) {
 
 function renderArticleCardHtml(article) {
   const link = articleUrl(article.id, article.issueSlug);
-  const typeLabel = article.type || "Other";
-  const dateLabel = formatDate(article.date);
-
   return `
     <article class="article-card">
       <h3><a href="${link}">${escapeHtml(article.title)}</a></h3>
       ${article.subtitle ? `<p class="muted">${escapeHtml(article.subtitle)}</p>` : ""}
       <div class="article-meta">
-        ${escapeHtml(typeLabel)} · ${escapeHtml(dateLabel)} ·
+        ${escapeHtml(article.type || "Other")} · ${escapeHtml(formatDate(article.date))} ·
         <a href="${authorUrl(article.author)}" style="color: var(--accent); text-decoration: none; font-weight: 950;">
           ${escapeHtml(article.author)}
         </a>
@@ -223,9 +198,27 @@ function renderArticleCardHtml(article) {
   `;
 }
 
-/* =========================
-   7) Home page render
-   ========================= */
+function pickHomepageArticles(articles) {
+  const sorted = sortByDateDesc(articles);
+
+  const main = sorted.find((a) => a.frontPageSlot === "main") ||
+               sorted.find((a) => a.featuredMain) ||
+               sorted[0];
+
+  const centerLead = sorted.find((a) => a.id !== main.id && a.frontPageSlot === "center-lead") ||
+                     sorted.find((a) => a.id !== main.id);
+
+  const centerCards = sorted
+    .filter((a) => a.id !== main.id && a.id !== centerLead?.id && a.frontPageSlot === "center")
+    .slice(0, 3);
+
+  const rightCards = sorted
+    .filter((a) => a.id !== main.id && a.id !== centerLead?.id && !centerCards.some((x) => x.id === a.id))
+    .filter((a) => a.frontPageSlot === "right" || !a.frontPageSlot || a.frontPageSlot === "none")
+    .slice(0, 6);
+
+  return { main, centerLead, centerCards, rightCards };
+}
 
 function renderHomeHeroThreeColumns(issueSlug, articles) {
   const mainContainer = document.getElementById("hero-main");
@@ -233,38 +226,22 @@ function renderHomeHeroThreeColumns(issueSlug, articles) {
   const rightContainer = document.getElementById("hero-right");
   if (!mainContainer || !centerContainer || !rightContainer) return;
 
-  const sorted = sortByDateDesc(articles);
-  if (sorted.length === 0) return;
-
-  const main = sorted.find((a) => a.featuredMain) || sorted[0];
-  const centerList = sorted.filter((a) => a.id !== main.id).slice(0, 4);
-  const rightList = sorted.filter((a) => a.id !== main.id && !centerList.includes(a)).slice(0, 6);
+  const { main, centerLead, centerCards, rightCards } = pickHomepageArticles(articles);
+  if (!main) return;
 
   const mainLink = articleUrl(main.id, issueSlug);
 
   mainContainer.innerHTML = `
     <article class="hero-main-article">
       <div class="hero-main-image-wrap">
-        ${
-          main.imageUrl
-            ? `<a href="${mainLink}">
-                 <img class="hero-main-image" src="${main.imageUrl}" alt="${escapeHtml(main.title)}">
-               </a>`
-            : ""
-        }
+        ${main.imageUrl ? `<a href="${mainLink}"><img class="hero-main-image" src="${main.imageUrl}" alt="${escapeHtml(main.title)}"></a>` : ""}
       </div>
-
       <div>
         <div class="hero-main-kicker">
           ${escapeHtml(main.category || "")}${main.date ? " | " + escapeHtml(formatDate(main.date)) : ""}
         </div>
-
-        <h1 class="hero-main-title">
-          <a href="${mainLink}">${escapeHtml(main.title)}</a>
-        </h1>
-
+        <h1 class="hero-main-title"><a href="${mainLink}">${escapeHtml(main.title)}</a></h1>
         ${main.subtitle ? `<p class="hero-main-dek">${escapeHtml(main.subtitle)}</p>` : ""}
-
         <p class="hero-main-byline">
           <a href="${authorUrl(main.author)}" style="color: inherit; text-decoration: none; font-weight: 950;">
             ${escapeHtml(main.author)}
@@ -275,53 +252,47 @@ function renderHomeHeroThreeColumns(issueSlug, articles) {
   `;
 
   centerContainer.innerHTML = "";
-  centerList.forEach((article, idx) => {
-    const link = articleUrl(article.id, issueSlug);
 
-    if (idx === 0) {
-      centerContainer.innerHTML += `
-        <article class="center-lead-card">
-          <div class="center-lead-image-wrap">
-            ${
-              article.imageUrl
-                ? `<a href="${link}">
-                     <img class="center-lead-image" src="${article.imageUrl}" alt="${escapeHtml(article.title)}">
-                   </a>`
-                : ""
-            }
-          </div>
-          <div class="center-kicker">
-            ${escapeHtml(article.category || "")}${article.date ? " | " + escapeHtml(formatDate(article.date)) : ""}
-          </div>
-          <h3 class="center-title"><a href="${link}">${escapeHtml(article.title)}</a></h3>
-          <p class="center-meta">
-            <a href="${authorUrl(article.author)}" style="color: inherit; text-decoration: none; font-weight: 950;">
-              ${escapeHtml(article.author)}
-            </a>
-          </p>
-        </article>
-      `;
-    } else {
-      centerContainer.innerHTML += `
-        <article class="center-card">
-          <div class="center-kicker">
-            ${escapeHtml(article.category || "")}${article.date ? " | " + escapeHtml(formatDate(article.date)) : ""}
-          </div>
-          <h3 class="center-card-title"><a href="${link}">${escapeHtml(article.title)}</a></h3>
-          <p class="center-card-meta">
-            <a href="${authorUrl(article.author)}" style="color: inherit; text-decoration: none; font-weight: 950;">
-              ${escapeHtml(article.author)}
-            </a>
-          </p>
-        </article>
-      `;
-    }
+  if (centerLead) {
+    const centerLeadLink = articleUrl(centerLead.id, issueSlug);
+    centerContainer.innerHTML += `
+      <article class="center-lead-card">
+        <div class="center-lead-image-wrap">
+          ${centerLead.imageUrl ? `<a href="${centerLeadLink}"><img class="center-lead-image" src="${centerLead.imageUrl}" alt="${escapeHtml(centerLead.title)}"></a>` : ""}
+        </div>
+        <div class="center-kicker">
+          ${escapeHtml(centerLead.category || "")}${centerLead.date ? " | " + escapeHtml(formatDate(centerLead.date)) : ""}
+        </div>
+        <h3 class="center-title"><a href="${centerLeadLink}">${escapeHtml(centerLead.title)}</a></h3>
+        <p class="center-meta">
+          <a href="${authorUrl(centerLead.author)}" style="color: inherit; text-decoration: none; font-weight: 950;">
+            ${escapeHtml(centerLead.author)}
+          </a>
+        </p>
+      </article>
+    `;
+  }
+
+  centerCards.forEach((article) => {
+    const link = articleUrl(article.id, issueSlug);
+    centerContainer.innerHTML += `
+      <article class="center-card">
+        <div class="center-kicker">
+          ${escapeHtml(article.category || "")}${article.date ? " | " + escapeHtml(formatDate(article.date)) : ""}
+        </div>
+        <h3 class="center-card-title"><a href="${link}">${escapeHtml(article.title)}</a></h3>
+        <p class="center-card-meta">
+          <a href="${authorUrl(article.author)}" style="color: inherit; text-decoration: none; font-weight: 950;">
+            ${escapeHtml(article.author)}
+          </a>
+        </p>
+      </article>
+    `;
   });
 
   rightContainer.innerHTML = "";
-  rightList.forEach((article) => {
+  rightCards.forEach((article) => {
     const link = articleUrl(article.id, issueSlug);
-
     if (article.sponsored) {
       rightContainer.innerHTML += `
         <article class="right-card-sponsored">
@@ -347,10 +318,6 @@ function renderHomeHeroThreeColumns(issueSlug, articles) {
     }
   });
 }
-
-/* =========================
-   8) Issue rendering
-   ========================= */
 
 async function loadAllArticlesAcrossIssues(issues) {
   const all = [];
@@ -409,7 +376,6 @@ async function renderCurrentIssuePage() {
   const q = getQueryParam("q");
   const issues = await loadIssuesList();
   const current = getCurrentIssueFromList(issues);
-
   const issueData = await loadIssueData(current.slug);
   const issueArticles = (issueData.articles || []).map((a) => normalizeArticlePaths(current.slug, a));
 
@@ -426,7 +392,7 @@ async function renderIssuePage() {
   const issues = await loadIssuesList();
   const issueMeta = issues.find((i) => i.slug === slug);
   if (!issueMeta) {
-    showPageError("Issue not found. Check your URL like issue.html?issue=winter-2025");
+    showPageError("Issue not found.");
     return;
   }
 
@@ -439,10 +405,6 @@ async function renderIssuePage() {
   renderIssueArticles(issueMeta, issueArticles, q, allForSearch);
 }
 
-/* =========================
-   9) Article page
-   ========================= */
-
 async function renderArticlePage() {
   const idRaw = getQueryParam("id");
   const issueSlug = getQueryParam("issue");
@@ -452,7 +414,6 @@ async function renderArticlePage() {
   const articleId = Number(idRaw);
   if (!issueSlug || Number.isNaN(articleId)) {
     container.innerHTML = "<p>Article not found.</p>";
-    showPageError("Missing id or issue in the URL. Example: article.html?id=1&issue=winter-2025");
     return;
   }
 
@@ -491,7 +452,16 @@ async function renderArticlePage() {
 
       ${article.imageUrl ? `<img class="article-hero-image" src="${article.imageUrl}" alt="${escapeHtml(article.title)}">` : ""}
 
+      ${article.imageCaption ? `<div class="article-image-caption" style="margin-top:-0.6rem; margin-bottom:1rem; color:var(--muted); font-size:0.92rem;">${escapeHtml(article.imageCaption)}</div>` : ""}
+
       <div class="article-body"><p>Loading…</p></div>
+
+      ${article.citationsHtml ? `
+        <section class="article-citations" style="margin-top:2rem;">
+          <h2 style="font-size:1.1rem; margin-bottom:0.5rem;">Citations</h2>
+          <div class="article-citations-body">${article.citationsHtml}</div>
+        </section>
+      ` : ""}
     </div>
   `;
 
@@ -515,10 +485,6 @@ async function renderArticlePage() {
     });
 }
 
-/* =========================
-   10) Archive page
-   ========================= */
-
 async function renderArchivePage() {
   const grid = document.getElementById("issue-grid");
   if (!grid) return;
@@ -531,13 +497,7 @@ async function renderArchivePage() {
     grid.innerHTML += `
       <article class="issue-card">
         <div class="issue-cover-wrap">
-          ${
-            issue.coverImage
-              ? `<a href="${link}">
-                   <img src="${issue.coverImage}" alt="${escapeHtml(issue.title)} cover">
-                 </a>`
-              : ""
-          }
+          ${issue.coverImage ? `<a href="${link}"><img src="${issue.coverImage}" alt="${escapeHtml(issue.title)} cover"></a>` : ""}
         </div>
         <a class="issue-title-link" href="${link}">${escapeHtml(issue.title)}</a>
         <div class="issue-date">${escapeHtml(issue.dateLabel)}</div>
@@ -546,10 +506,6 @@ async function renderArchivePage() {
   });
 }
 
-/* =========================
-   11) Authors page (global)
-   ========================= */
-
 async function renderAuthorsPage() {
   const container = document.getElementById("authors-container");
   if (!container) return;
@@ -557,7 +513,6 @@ async function renderAuthorsPage() {
   const issues = await loadIssuesList();
   const authorFilter = getQueryParam("author");
   const q = getQueryParam("q");
-
   const all = await loadAllArticlesAcrossIssues(issues);
 
   const map = new Map();
@@ -603,10 +558,6 @@ async function renderAuthorsPage() {
 
   container.appendChild(wrapper);
 }
-
-/* =========================
-   12) Init
-   ========================= */
 
 document.addEventListener("DOMContentLoaded", async () => {
   try {
