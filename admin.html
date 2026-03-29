@@ -8,8 +8,24 @@
   <link rel="stylesheet" href="assets/css/admin.css" />
   <script defer src="assets/js/admin.js" type="module"></script>
 </head>
-<body>
-  <main class="admin-shell">
+<body class="admin-locked">
+  <div id="admin-auth-gate" class="admin-auth-gate">
+    <div class="admin-auth-card">
+      <h1>The Cactus Admin</h1>
+      <p>Enter the admin password to continue.</p>
+
+      <form id="admin-auth-form" class="admin-auth-form">
+        <label>Password
+          <input id="admin-password-input" type="password" autocomplete="current-password" required />
+        </label>
+        <button type="submit">Unlock admin</button>
+      </form>
+
+      <div id="admin-auth-error" class="admin-auth-error" hidden></div>
+    </div>
+  </div>
+
+  <main id="admin-app" class="admin-shell" hidden>
     <section class="admin-header">
       <h1>The Cactus Admin</h1>
       <p>Upload issues and articles here.</p>
@@ -120,8 +136,8 @@
               </select>
             </label>
 
-            <label>Hero image
-              <input type="file" name="hero" accept="image/*" required />
+            <label>Hero image (optional)
+              <input type="file" name="hero" accept="image/*" />
             </label>
 
             <label>Image caption

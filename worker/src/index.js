@@ -1,7 +1,8 @@
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, X-Admin-Password",
+  "Cache-Control": "no-store",
   "content-type": "application/json; charset=utf-8"
 };
 
@@ -17,6 +18,17 @@ export default {
     }
 
     try {
+      if (url.pathname === "/api/auth" && request.method === "POST") {
+        const body = await request.json();
+        if (!env.ADMIN_PASSWORD) {
+          return json({ error: "ADMIN_PASSWORD is not configured." }, 500);
+        }
+        if (!body?.password || body.password !== env.ADMIN_PASSWORD) {
+          return json({ error: "Incorrect password." }, 401);
+        }
+        return json({ ok: true });
+      }
+
       if (url.pathname === "/api/issues" && request.method === "GET") {
         const issues = await readJsonFromGitHub(env, "assets/data/issues.json");
         return json({ issues });
@@ -28,25 +40,51 @@ export default {
         return json(issue);
       }
 
+      if (url.pathname === "/api/article-body" && request.method === "GET") {
+        const issueSlug = url.searchParams.get("issueSlug") || "";
+        const articleId = Number(url.searchParams.get("articleId") || "");
+        if (!issueSlug || Number.isNaN(articleId)) {
+          return json({ error: "Missing issueSlug or articleId." }, 400);
+        }
+
+        const issue = await readJsonFromGitHub(env, `issues/${issueSlug}/issue.json`);
+        const articles = Array.isArray(issue.articles) ? issue.articles : [];
+        const article = articles.find((a) => Number(a.id) === articleId);
+
+        if (!article) return json({ error: "Article not found." }, 404);
+
+        const contentPath = article.contentPath || `articles/${articleId}/article.html`;
+        const fullPath = contentPath.startsWith(`issues/${issueSlug}/`)
+          ? contentPath
+          : `issues/${issueSlug}/${contentPath}`;
+
+        const html = await readTextFromGitHub(env, fullPath);
+        return json({ html });
+      }
+
       if (url.pathname === "/api/issues" && request.method === "POST") {
+        requireAdminPassword(request, env);
         const body = await request.json();
         await createIssue(env, body);
         return json({ ok: true });
       }
 
       if (url.pathname === "/api/issues/current" && request.method === "POST") {
+        requireAdminPassword(request, env);
         const body = await request.json();
         await setCurrentIssue(env, body.slug);
         return json({ ok: true });
       }
 
       if (url.pathname === "/api/articles" && request.method === "POST") {
+        requireAdminPassword(request, env);
         const body = await request.json();
         const result = await createArticle(env, body);
         return json({ ok: true, articleId: result.articleId });
       }
 
       if (url.pathname === "/api/articles/update" && request.method === "POST") {
+        requireAdminPassword(request, env);
         const body = await request.json();
         await updateArticle(env, body);
         return json({ ok: true });
@@ -66,6 +104,19 @@ function json(data, status = 200) {
   });
 }
 
+function requireAdminPassword(request, env) {
+  if (!env.ADMIN_PASSWORD) {
+    throw new Error("ADMIN_PASSWORD is not configured.");
+  }
+
+  const supplied = request.headers.get("X-Admin-Password") || "";
+  if (!supplied || supplied !== env.ADMIN_PASSWORD) {
+    const err = new Error("Unauthorized.");
+    err.status = 401;
+    throw err;
+  }
+}
+
 function ghHeaders(env) {
   return {
     Authorization: `Bearer ${env.GITHUB_TOKEN}`,
@@ -79,6 +130,21 @@ function b64FromUtf8(text) {
   let binary = "";
   for (const b of bytes) binary += String.fromCharCode(b);
   return btoa(binary);
+}
+
+function decodeBase64Utf8(content) {
+  const binary = atob(content.replace(/\n/g, ""));
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+function slugifyValue(s) {
+  return String(s || "")
+    .toLowerCase()
+    .trim()
+    .replace(/['’"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function textToStoredHtml(text) {
@@ -113,8 +179,13 @@ async function githubGetContent(env, path) {
 async function readJsonFromGitHub(env, path) {
   const file = await githubGetContent(env, path);
   if (!file) throw new Error(`Missing file: ${path}`);
-  const decoded = atob(file.content.replace(/\n/g, ""));
-  return JSON.parse(decoded);
+  return JSON.parse(decodeBase64Utf8(file.content));
+}
+
+async function readTextFromGitHub(env, path) {
+  const file = await githubGetContent(env, path);
+  if (!file) throw new Error(`Missing file: ${path}`);
+  return decodeBase64Utf8(file.content);
 }
 
 async function writeFileToGitHub(env, path, base64Content, message) {
@@ -242,7 +313,7 @@ async function createArticle(env, body) {
     heroExtension
   } = body;
 
-  if (!issueSlug || !title || !author || !date || !type || !bodyText || !heroBase64) {
+  if (!issueSlug || !title || !author || !date || !type || !bodyText) {
     throw new Error("Missing required article fields.");
   }
 
@@ -254,10 +325,13 @@ async function createArticle(env, body) {
     ? Math.max(...articles.map((a) => Number(a.id) || 0)) + 1
     : 1;
 
-  const ext = (heroExtension || "jpg").replace(/[^a-z0-9]/gi, "").toLowerCase() || "jpg";
+  const hasHero = typeof heroBase64 === "string" && heroBase64.length > 0;
+  const ext = String(heroExtension || "jpg").replace(/[^a-z0-9]/gi, "").toLowerCase() || "jpg";
+  const slug = slugifyValue(title) || String(nextId);
 
   const articleObject = {
     id: nextId,
+    slug,
     title,
     subtitle: subtitle || "",
     author,
@@ -268,7 +342,7 @@ async function createArticle(env, body) {
     featuredMain: !!featuredMain,
     sponsored: !!sponsored,
     frontPageSlot: frontPageSlot || "none",
-    imageUrl: `articles/${nextId}/hero.${ext}`,
+    imageUrl: hasHero ? `articles/${nextId}/hero.${ext}` : "",
     imageCaption: imageCaption || "",
     contentPath: `articles/${nextId}/article.html`,
     citationsText: citationsText || ""
@@ -276,12 +350,14 @@ async function createArticle(env, body) {
 
   articles.push(articleObject);
 
-  await writeFileToGitHub(
-    env,
-    `issues/${issueSlug}/articles/${nextId}/hero.${ext}`,
-    heroBase64,
-    `Upload hero image for article ${nextId} in ${issueSlug}`
-  );
+  if (hasHero) {
+    await writeFileToGitHub(
+      env,
+      `issues/${issueSlug}/articles/${nextId}/hero.${ext}`,
+      heroBase64,
+      `Upload hero image for article ${nextId} in ${issueSlug}`
+    );
+  }
 
   await writeFileToGitHub(
     env,
@@ -338,18 +414,24 @@ async function updateArticle(env, body) {
   if (idx === -1) throw new Error("Article not found.");
 
   const existing = articles[idx];
-  let ext = "jpg";
+  const hasNewHero = typeof heroBase64 === "string" && heroBase64.length > 0;
 
-  if (existing.imageUrl && existing.imageUrl.includes(".")) {
-    ext = existing.imageUrl.split(".").pop().toLowerCase();
-  }
+  let nextImageUrl = existing.imageUrl || "";
+  if (hasNewHero) {
+    const ext = String(heroExtension || "jpg").replace(/[^a-z0-9]/gi, "").toLowerCase() || "jpg";
+    nextImageUrl = `articles/${articleId}/hero.${ext}`;
 
-  if (heroExtension) {
-    ext = String(heroExtension).replace(/[^a-z0-9]/gi, "").toLowerCase() || ext;
+    await writeFileToGitHub(
+      env,
+      `issues/${issueSlug}/${nextImageUrl}`,
+      heroBase64,
+      `Update hero image for article ${articleId} in ${issueSlug}`
+    );
   }
 
   articles[idx] = {
     ...existing,
+    slug: slugifyValue(title) || existing.slug || String(articleId),
     title,
     subtitle: subtitle || "",
     author,
@@ -360,20 +442,11 @@ async function updateArticle(env, body) {
     featuredMain: !!featuredMain,
     sponsored: !!sponsored,
     frontPageSlot: frontPageSlot || "none",
-    imageUrl: `articles/${articleId}/hero.${ext}`,
+    imageUrl: nextImageUrl,
     imageCaption: imageCaption || "",
     contentPath: `articles/${articleId}/article.html`,
     citationsText: citationsText || ""
   };
-
-  if (heroBase64) {
-    await writeFileToGitHub(
-      env,
-      `issues/${issueSlug}/articles/${articleId}/hero.${ext}`,
-      heroBase64,
-      `Update hero image for article ${articleId} in ${issueSlug}`
-    );
-  }
 
   await writeFileToGitHub(
     env,

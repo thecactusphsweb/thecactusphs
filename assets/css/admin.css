@@ -200,6 +200,81 @@
   line-height: 1.6;
 }
 
+body.admin-locked {
+  overflow: hidden;
+}
+
+.admin-auth-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: rgba(224, 232, 226, 0.92);
+  backdrop-filter: blur(10px);
+}
+
+.admin-auth-card {
+  width: min(480px, 100%);
+  background: rgba(255,255,255,0.97);
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 1rem;
+  padding: 1.4rem;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.08);
+}
+
+.admin-auth-card h1 {
+  color: var(--ink);
+  margin-bottom: 0.35rem;
+}
+
+.admin-auth-card p {
+  color: var(--muted);
+  margin-bottom: 1rem;
+}
+
+.admin-auth-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.admin-auth-form label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.admin-auth-form input {
+  width: 100%;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: white;
+  font: inherit;
+}
+
+.admin-auth-form button {
+  justify-self: start;
+  padding: 0.75rem 1rem;
+  border-radius: 0.8rem;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: var(--sand);
+  font-weight: 900;
+  cursor: pointer;
+  font: inherit;
+}
+
+.admin-auth-error {
+  margin-top: 0.9rem;
+  padding: 0.75rem 0.95rem;
+  border-radius: 0.8rem;
+  border: 1px solid rgba(155, 28, 28, 0.12);
+  color: #9b1c1c;
+  background: rgba(255,255,255,0.9);
+}
+
 @media (max-width: 980px) {
   .editor-layout {
     grid-template-columns: 1fr;

@@ -2,12 +2,14 @@
    The Cactus — public site
    ========================================================= */
 
+const API_BASE = "https://the-cactus-admin-api.thecactusphsweb.workers.dev";
+
 async function loadPartials() {
   const headerMount = document.getElementById("header-mount");
   const footerMount = document.getElementById("footer-mount");
 
   if (headerMount) {
-    const res = await fetch("partials/header.html");
+    const res = await fetch("partials/header.html", { cache: "no-store" });
     if (!res.ok) throw new Error("Could not load partials/header.html");
     headerMount.innerHTML = await res.text();
 
@@ -17,7 +19,7 @@ async function loadPartials() {
   }
 
   if (footerMount) {
-    const res = await fetch("partials/footer.html");
+    const res = await fetch("partials/footer.html", { cache: "no-store" });
     if (!res.ok) throw new Error("Could not load partials/footer.html");
     footerMount.innerHTML = await res.text();
 
@@ -50,6 +52,15 @@ function normalize(s) {
   return String(s || "").toLowerCase().trim();
 }
 
+function slugifyValue(s) {
+  return String(s || "")
+    .toLowerCase()
+    .trim()
+    .replace(/['’"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 function escapeHtml(s) {
   return String(s)
     .replaceAll("&", "&amp;")
@@ -73,27 +84,63 @@ function sortByDateDesc(list) {
   return [...list].sort((a, b) => new Date(b.date) - new Date(a.date));
 }
 
-async function fetchJson(path) {
-  const res = await fetch(path);
+function issueUrl(issueSlug) {
+  return `issue.html?issue=${encodeURIComponent(issueSlug)}`;
+}
+
+function articleUrl(article) {
+  const articleSlug = article.slug || slugifyValue(article.title) || String(article.id);
+  return `article.html?issue=${encodeURIComponent(article.issueSlug)}&article=${encodeURIComponent(articleSlug)}`;
+}
+
+async function fetchApiJson(path) {
+  const res = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
+  const text = await res.text();
+
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { raw: text };
+  }
+
+  if (!res.ok) throw new Error(data.error || `Failed to load ${path}`);
+  return data;
+}
+
+async function fetchStaticText(path) {
+  const res = await fetch(path, { cache: "no-store" });
   if (!res.ok) throw new Error(`Failed to load ${path}`);
-  return res.json();
+  return res.text();
 }
 
 async function loadIssuesList() {
   if (window.__CACTUS_ISSUES__) return window.__CACTUS_ISSUES__;
-  const issues = await fetchJson("assets/data/issues.json");
-  window.__CACTUS_ISSUES__ = issues;
-  return issues;
+  const data = await fetchApiJson("/api/issues");
+  window.__CACTUS_ISSUES__ = data.issues || [];
+  return window.__CACTUS_ISSUES__;
 }
 
 async function loadIssueData(slug) {
   window.__CACTUS_ISSUE_CACHE__ = window.__CACTUS_ISSUE_CACHE__ || {};
   if (window.__CACTUS_ISSUE_CACHE__[slug]) return window.__CACTUS_ISSUE_CACHE__[slug];
 
-  const data = await fetchJson(`issues/${slug}/issue.json`);
+  const data = await fetchApiJson(`/api/issues/${encodeURIComponent(slug)}`);
   const articles = Array.isArray(data.articles) ? data.articles : [];
   window.__CACTUS_ISSUE_CACHE__[slug] = { slug: data.slug || slug, articles };
   return window.__CACTUS_ISSUE_CACHE__[slug];
+}
+
+async function loadArticleBody(issueSlug, articleId, fallbackPath = "") {
+  try {
+    const data = await fetchApiJson(
+      `/api/article-body?issueSlug=${encodeURIComponent(issueSlug)}&articleId=${encodeURIComponent(articleId)}`
+    );
+    return data.html || "";
+  } catch {
+    if (!fallbackPath) return "";
+    return await fetchStaticText(fallbackPath);
+  }
 }
 
 function getCurrentIssueFromList(issues) {
@@ -113,14 +160,11 @@ function normalizeArticlePaths(issueSlug, article) {
 
   return {
     ...article,
+    slug: article.slug || slugifyValue(article.title) || String(article.id),
     issueSlug,
     imageUrl: fix(article.imageUrl),
     contentPath: fix(article.contentPath),
   };
-}
-
-function articleUrl(articleId, issueSlug) {
-  return `article.html?id=${encodeURIComponent(articleId)}&issue=${encodeURIComponent(issueSlug)}`;
 }
 
 function authorUrl(authorName) {
@@ -141,6 +185,15 @@ function initHeader() {
   const q = getQueryParam("q");
   const input = document.getElementById("site-search-input");
   if (input && q) input.value = q;
+}
+
+function updateCurrentIssueNavLink(issues) {
+  const link = document.querySelector('[data-nav="current"]');
+  if (!link) return;
+  const current = getCurrentIssueFromList(issues);
+  if (current) {
+    link.href = issueUrl(current.slug);
+  }
 }
 
 function searchArticlesInList(query, articles) {
@@ -183,7 +236,7 @@ function renderSearchSummary(container, query, count) {
 }
 
 function renderArticleCardHtml(article) {
-  const link = articleUrl(article.id, article.issueSlug);
+  const link = articleUrl(article);
   return `
     <article class="article-card">
       <h3><a href="${link}">${escapeHtml(article.title)}</a></h3>
@@ -229,7 +282,7 @@ function renderHomeHeroThreeColumns(issueSlug, articles) {
   const { main, centerLead, centerCards, rightCards } = pickHomepageArticles(articles);
   if (!main) return;
 
-  const mainLink = articleUrl(main.id, issueSlug);
+  const mainLink = articleUrl(main);
 
   mainContainer.innerHTML = `
     <article class="hero-main-article">
@@ -254,7 +307,7 @@ function renderHomeHeroThreeColumns(issueSlug, articles) {
   centerContainer.innerHTML = "";
 
   if (centerLead) {
-    const centerLeadLink = articleUrl(centerLead.id, issueSlug);
+    const centerLeadLink = articleUrl(centerLead);
     centerContainer.innerHTML += `
       <article class="center-lead-card">
         <div class="center-lead-image-wrap">
@@ -274,7 +327,7 @@ function renderHomeHeroThreeColumns(issueSlug, articles) {
   }
 
   centerCards.forEach((article) => {
-    const link = articleUrl(article.id, issueSlug);
+    const link = articleUrl(article);
     centerContainer.innerHTML += `
       <article class="center-card">
         <div class="center-kicker">
@@ -292,7 +345,7 @@ function renderHomeHeroThreeColumns(issueSlug, articles) {
 
   rightContainer.innerHTML = "";
   rightCards.forEach((article) => {
-    const link = articleUrl(article.id, issueSlug);
+    const link = articleUrl(article);
     if (article.sponsored) {
       rightContainer.innerHTML += `
         <article class="right-card-sponsored">
@@ -400,6 +453,14 @@ async function renderCurrentIssuePage() {
   const q = getQueryParam("q");
   const issues = await loadIssuesList();
   const current = getCurrentIssueFromList(issues);
+
+  if (!current) {
+    showPageError("No issues published yet.");
+    return;
+  }
+
+  document.title = `${current.title} – The Cactus`;
+
   const issueData = await loadIssueData(current.slug);
   const issueArticles = (issueData.articles || []).map((a) => normalizeArticlePaths(current.slug, a));
 
@@ -420,6 +481,8 @@ async function renderIssuePage() {
     return;
   }
 
+  document.title = `${issueMeta.title} – The Cactus`;
+
   const issueData = await loadIssueData(issueMeta.slug);
   const issueArticles = (issueData.articles || []).map((a) => normalizeArticlePaths(issueMeta.slug, a));
 
@@ -430,13 +493,13 @@ async function renderIssuePage() {
 }
 
 async function renderArticlePage() {
-  const idRaw = getQueryParam("id");
   const issueSlug = getQueryParam("issue");
+  const articleSlug = getQueryParam("article");
+  const legacyIdRaw = getQueryParam("id");
   const container = document.getElementById("article-container");
   if (!container) return;
 
-  const articleId = Number(idRaw);
-  if (!issueSlug || Number.isNaN(articleId)) {
+  if (!issueSlug || (!articleSlug && !legacyIdRaw)) {
     container.innerHTML = "<p>Article not found.</p>";
     return;
   }
@@ -450,18 +513,29 @@ async function renderArticlePage() {
 
   const issueData = await loadIssueData(issueSlug);
   const issueArticles = (issueData.articles || []).map((a) => normalizeArticlePaths(issueSlug, a));
-  const article = issueArticles.find((a) => Number(a.id) === articleId);
+
+  let article = null;
+
+  if (articleSlug) {
+    article = issueArticles.find((a) => a.slug === articleSlug);
+  }
+
+  if (!article && legacyIdRaw) {
+    const articleId = Number(legacyIdRaw);
+    article = issueArticles.find((a) => Number(a.id) === articleId);
+  }
 
   if (!article) {
     container.innerHTML = "<p>Article not found.</p>";
     return;
   }
 
+  document.title = `${article.title} – The Cactus`;
+
   container.innerHTML = `
     <div class="article-page">
       <div class="article-breadcrumb">
-        <a href="articles.html">Current Issue</a>
-        • <a href="issue.html?issue=${encodeURIComponent(issueSlug)}">${escapeHtml(issueMeta.title)}</a>
+        <a href="${issueUrl(issueSlug)}">${escapeHtml(issueMeta.title)}</a>
       </div>
 
       <h1 class="article-title">${escapeHtml(article.title)}</h1>
@@ -490,23 +564,8 @@ async function renderArticlePage() {
   `;
 
   const bodyEl = container.querySelector(".article-body");
-
-  if (!article.contentPath) {
-    bodyEl.innerHTML = "<p>Full text coming soon.</p>";
-    return;
-  }
-
-  fetch(article.contentPath)
-    .then((res) => {
-      if (!res.ok) throw new Error("Could not load article HTML");
-      return res.text();
-    })
-    .then((html) => {
-      bodyEl.innerHTML = html;
-    })
-    .catch(() => {
-      bodyEl.innerHTML = "<p>Full text coming soon.</p>";
-    });
+  const html = await loadArticleBody(issueSlug, article.id, article.contentPath || "");
+  bodyEl.innerHTML = html || "<p>Full text coming soon.</p>";
 }
 
 async function renderArchivePage() {
@@ -517,7 +576,7 @@ async function renderArchivePage() {
   grid.innerHTML = "";
 
   issues.forEach((issue) => {
-    const link = `issue.html?issue=${encodeURIComponent(issue.slug)}`;
+    const link = issueUrl(issue.slug);
     grid.innerHTML += `
       <article class="issue-card">
         <div class="issue-cover-wrap">
@@ -587,11 +646,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   try {
     await loadPartials();
 
+    const issues = await loadIssuesList();
+    updateCurrentIssueNavLink(issues);
+
     const page = document.body.dataset.page;
 
     if (page === "home") {
-      const issues = await loadIssuesList();
       const current = getCurrentIssueFromList(issues);
+      if (!current) {
+        showPageError("No issues published yet.");
+        return;
+      }
       const data = await loadIssueData(current.slug);
       const articles = (data.articles || []).map((a) => normalizeArticlePaths(current.slug, a));
       renderHomeHeroThreeColumns(current.slug, articles);

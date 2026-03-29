@@ -1,4 +1,11 @@
 const API_BASE = "https://the-cactus-admin-api.thecactusphsweb.workers.dev";
+const AUTH_PASSWORD_KEY = "cactus_admin_password";
+
+const adminApp = document.getElementById("admin-app");
+const authGate = document.getElementById("admin-auth-gate");
+const authForm = document.getElementById("admin-auth-form");
+const authPasswordInput = document.getElementById("admin-password-input");
+const authErrorEl = document.getElementById("admin-auth-error");
 
 const statusEl = document.getElementById("admin-status");
 const issueForm = document.getElementById("issue-form");
@@ -19,24 +26,58 @@ const editPreview = document.getElementById("edit-preview");
 const tabs = document.querySelectorAll(".admin-tab");
 const panels = document.querySelectorAll(".admin-tab-panel");
 
+function getAdminPassword() {
+  return sessionStorage.getItem(AUTH_PASSWORD_KEY) || "";
+}
+
+function setAdminPassword(password) {
+  sessionStorage.setItem(AUTH_PASSWORD_KEY, password);
+}
+
+function clearAdminPassword() {
+  sessionStorage.removeItem(AUTH_PASSWORD_KEY);
+}
+
 function setStatus(message, isError = false) {
+  if (!statusEl) return;
   statusEl.textContent = message;
   statusEl.style.color = isError ? "#9b1c1c" : "";
 }
 
-function switchTab(tabId) {
-  tabs.forEach((btn) => btn.classList.toggle("active", btn.dataset.tab === tabId));
-  panels.forEach((panel) => panel.classList.toggle("active", panel.id === tabId));
+function setAuthError(message = "") {
+  if (!authErrorEl) return;
+  authErrorEl.hidden = !message;
+  authErrorEl.textContent = message;
 }
 
-tabs.forEach((btn) => btn.addEventListener("click", () => switchTab(btn.dataset.tab)));
+function unlockAdmin() {
+  document.body.classList.remove("admin-locked");
+  if (authGate) authGate.hidden = true;
+  if (adminApp) adminApp.hidden = false;
+}
 
-async function api(path, method = "GET", body = null) {
-  const opts = { method, headers: {} };
+function lockAdmin() {
+  document.body.classList.add("admin-locked");
+  if (authGate) authGate.hidden = false;
+  if (adminApp) adminApp.hidden = true;
+}
+
+async function api(path, method = "GET", body = null, includeAdminPassword = false) {
+  const opts = {
+    method,
+    headers: {},
+    cache: "no-store"
+  };
 
   if (body) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(body);
+  }
+
+  if (includeAdminPassword) {
+    const password = getAdminPassword();
+    if (!password) throw new Error("Admin password is missing. Refresh and log in again.");
+    opts.headers["X-Admin-Password"] = password;
   }
 
   const res = await fetch(`${API_BASE}${path}`, opts);
@@ -53,8 +94,54 @@ async function api(path, method = "GET", body = null) {
   return data;
 }
 
+async function requireAdminAccess() {
+  const existingPassword = getAdminPassword();
+  if (existingPassword) {
+    try {
+      await api("/api/auth", "POST", { password: existingPassword });
+      unlockAdmin();
+      return;
+    } catch {
+      clearAdminPassword();
+    }
+  }
+
+  lockAdmin();
+
+  await new Promise((resolve) => {
+    authForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      setAuthError("");
+
+      try {
+        const password = authPasswordInput.value;
+        await api("/api/auth", "POST", { password });
+        setAdminPassword(password);
+        authPasswordInput.value = "";
+        unlockAdmin();
+        setStatus("Authenticated.");
+        resolve();
+      } catch (err) {
+        setAuthError(err.message || "Incorrect password.");
+      }
+    }, { once: false });
+  });
+}
+
+function switchTab(tabId) {
+  tabs.forEach((btn) => btn.classList.toggle("active", btn.dataset.tab === tabId));
+  panels.forEach((panel) => panel.classList.toggle("active", panel.id === tabId));
+}
+
+tabs.forEach((btn) => btn.addEventListener("click", () => switchTab(btn.dataset.tab)));
+
 function slugify(text) {
-  return text.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return String(text || "")
+    .toLowerCase()
+    .trim()
+    .replace(/['’"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 async function fileToBase64(file) {
@@ -82,6 +169,27 @@ function textToParagraphHtml(text) {
     .split(/\n\s*\n/)
     .map((para) => `<p>${escapeHtml(para).replace(/\n/g, "<br>")}</p>`)
     .join("");
+}
+
+function storedHtmlToPlainText(html) {
+  if (!html) return "";
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(`<div>${html}</div>`, "text/html");
+  const root = doc.body.firstElementChild || doc.body;
+
+  const blocks = [];
+
+  Array.from(root.children).forEach((el) => {
+    el.querySelectorAll("br").forEach((br) => br.replaceWith("\n"));
+    const text = (el.textContent || "").trim();
+    if (text) blocks.push(text);
+  });
+
+  if (blocks.length) return blocks.join("\n\n").trim();
+
+  root.querySelectorAll("br").forEach((br) => br.replaceWith("\n"));
+  return (root.textContent || "").trim();
 }
 
 function renderPreview(targetEl, data, imageUrl = "") {
@@ -140,9 +248,7 @@ function bindLivePreview(form, previewEl) {
   if (imageInput) {
     imageInput.addEventListener("change", () => {
       const file = imageInput.files?.[0];
-      if (file) {
-        currentImageUrl = URL.createObjectURL(file);
-      }
+      currentImageUrl = file ? URL.createObjectURL(file) : "";
       update();
     });
   }
@@ -158,6 +264,22 @@ function bindLivePreview(form, previewEl) {
   };
 }
 
+function resolveIssueAssetPath(issueSlug, relativePath) {
+  if (!relativePath) return "";
+  if (relativePath.startsWith("http://") || relativePath.startsWith("https://")) return relativePath;
+  const prefix = `issues/${issueSlug}/`;
+  if (relativePath.startsWith(prefix)) return relativePath;
+  if (relativePath.startsWith("articles/")) return prefix + relativePath;
+  return relativePath;
+}
+
+async function fetchArticleBodyHtml(issueSlug, articleId) {
+  const data = await api(
+    `/api/article-body?issueSlug=${encodeURIComponent(issueSlug)}&articleId=${encodeURIComponent(articleId)}`
+  );
+  return data.html || "";
+}
+
 let issuesCache = [];
 let issueArticlesCache = new Map();
 
@@ -166,6 +288,7 @@ async function refreshIssues() {
   issuesCache = data.issues || [];
 
   for (const select of [issueSelect, currentIssueSelect, editIssueSelect, editIssueTargetSelect]) {
+    if (!select) continue;
     select.innerHTML = "";
     issuesCache.forEach((issue) => {
       const opt = document.createElement("option");
@@ -176,11 +299,11 @@ async function refreshIssues() {
   }
 
   const current = issuesCache.find((x) => x.isCurrent);
-  if (current) currentIssueSelect.value = current.slug;
+  if (current && currentIssueSelect) currentIssueSelect.value = current.slug;
 
-  if (issuesCache.length) {
+  if (issuesCache.length && editIssueSelect) {
     await refreshArticlesForIssue(editIssueSelect.value || issuesCache[0].slug);
-  } else {
+  } else if (editArticleSelect) {
     editArticleSelect.innerHTML = "";
   }
 }
@@ -190,7 +313,9 @@ async function refreshArticlesForIssue(issueSlug) {
   const articles = data.articles || [];
   issueArticlesCache.set(issueSlug, articles);
 
+  if (!editArticleSelect) return;
   editArticleSelect.innerHTML = "";
+
   articles.forEach((article) => {
     const opt = document.createElement("option");
     opt.value = String(article.id);
@@ -208,10 +333,12 @@ issueForm.querySelector('input[name="slug"]').addEventListener("input", (e) => {
   e.target.dataset.manual = "1";
 });
 
-editIssueSelect.addEventListener("change", async () => {
-  if (!editIssueSelect.value) return;
-  await refreshArticlesForIssue(editIssueSelect.value);
-});
+if (editIssueSelect) {
+  editIssueSelect.addEventListener("change", async () => {
+    if (!editIssueSelect.value) return;
+    await refreshArticlesForIssue(editIssueSelect.value);
+  });
+}
 
 const createPreviewController = bindLivePreview(articleForm, createPreview);
 const editPreviewController = bindLivePreview(editArticleForm, editPreview);
@@ -236,7 +363,7 @@ issueForm.addEventListener("submit", async (e) => {
       coverExtension: cover.name.split(".").pop()?.toLowerCase() || "jpg"
     };
 
-    await api("/api/issues", "POST", payload);
+    await api("/api/issues", "POST", payload, true);
     issueForm.reset();
     await refreshIssues();
     setStatus("Issue created.");
@@ -251,8 +378,6 @@ articleForm.addEventListener("submit", async (e) => {
     setStatus("Creating article…");
     const fd = new FormData(articleForm);
     const hero = fd.get("hero");
-    if (!(hero instanceof File) || !hero.size) throw new Error("Please upload a hero image.");
-
     const tags = String(fd.get("tags") || "").split(",").map((x) => x.trim()).filter(Boolean);
     const slot = String(fd.get("frontPageSlot") || "none");
 
@@ -270,15 +395,21 @@ articleForm.addEventListener("submit", async (e) => {
       sponsored: false,
       imageCaption: fd.get("imageCaption"),
       citationsText: fd.get("citationsText"),
-      bodyText: fd.get("bodyText"),
-      heroBase64: await fileToBase64(hero),
-      heroExtension: hero.name.split(".").pop()?.toLowerCase() || "jpg"
+      bodyText: fd.get("bodyText")
     };
 
-    await api("/api/articles", "POST", payload);
+    if (hero instanceof File && hero.size) {
+      payload.heroBase64 = await fileToBase64(hero);
+      payload.heroExtension = hero.name.split(".").pop()?.toLowerCase() || "jpg";
+    }
+
+    await api("/api/articles", "POST", payload, true);
     articleForm.reset();
     createPreviewController.setImageUrl("");
     await refreshIssues();
+    if (payload.issueSlug) {
+      await refreshArticlesForIssue(payload.issueSlug);
+    }
     setStatus("Article created.");
   } catch (err) {
     setStatus(err.message, true);
@@ -290,7 +421,7 @@ currentForm.addEventListener("submit", async (e) => {
   try {
     setStatus("Updating current issue…");
     const fd = new FormData(currentForm);
-    await api("/api/issues/current", "POST", { slug: fd.get("currentSlug") });
+    await api("/api/issues/current", "POST", { slug: fd.get("currentSlug") }, true);
     await refreshIssues();
     setStatus("Current issue updated.");
   } catch (err) {
@@ -322,11 +453,10 @@ loadArticleForm.addEventListener("submit", async (e) => {
     editArticleForm.elements.imageCaption.value = article.imageCaption || "";
     editArticleForm.elements.citationsText.value = article.citationsText || "";
 
-    const res = await fetch(`issues/${issueSlug}/articles/${article.id}/article.html`);
-    if (!res.ok) throw new Error("Could not load article body.");
-    editArticleForm.elements.bodyText.value = await res.text();
+    const html = await fetchArticleBodyHtml(issueSlug, article.id);
+    editArticleForm.elements.bodyText.value = storedHtmlToPlainText(html);
 
-    editPreviewController.setImageUrl(`issues/${issueSlug}/articles/${article.id}/${article.imageUrl.split("/").pop()}`);
+    editPreviewController.setImageUrl(resolveIssueAssetPath(issueSlug, article.imageUrl || ""));
     editPreviewController.update();
 
     switchTab("edit-articles-tab");
@@ -368,7 +498,7 @@ editArticleForm.addEventListener("submit", async (e) => {
       payload.heroExtension = hero.name.split(".").pop()?.toLowerCase() || "jpg";
     }
 
-    await api("/api/articles/update", "POST", payload);
+    await api("/api/articles/update", "POST", payload, true);
     await refreshIssues();
     if (editIssueSelect.value) {
       await refreshArticlesForIssue(editIssueSelect.value);
@@ -379,4 +509,12 @@ editArticleForm.addEventListener("submit", async (e) => {
   }
 });
 
-refreshIssues().catch((err) => setStatus(err.message, true));
+async function boot() {
+  await requireAdminAccess();
+  await refreshIssues();
+}
+
+boot().catch((err) => {
+  lockAdmin();
+  setAuthError(err.message || "Could not initialize admin.");
+});
