@@ -4,5 +4,26 @@
   "dateLabel": "January 7, 2026",
   "coverFilename": "cover.png",
   "pdfUrl": "magazine.pdf",
-  "articles": []
+  "articles": [
+    {
+      "id": 1,
+      "slug": "the-town-that-cant-be-drowned-how-babcock-ranch-re-engineered-resilience",
+      "title": "The Town That Can’t be Drowned: How Babcock Ranch Re-engineered Resilience",
+      "subtitle": "",
+      "author": "Felix Yu",
+      "date": "2026-01-07",
+      "category": "Engineering",
+      "type": "Long Article",
+      "tags": [
+        "engineering"
+      ],
+      "featuredMain": false,
+      "sponsored": false,
+      "frontPageSlot": "none",
+      "imageUrl": "",
+      "heroFilename": "",
+      "imageCaption": "",
+      "citationsText": "[1] “Babcock Ranch Ranked No. 7 among 50 Top-Selling Master-Planned Communities of 2025 | Babcock Ranch.” Babcock Ranch, 7 Aug. 2025, babcockranch.com/babcock-ranch-ranked-no-7-among-50-top-selling-master-planned-communities-of-2025/.\n[2] Brennan, Michael, et al. “Recent Trends in Tropical Cyclone Fatalities in the United States – the Front Page.” The Front Page - Blog of the American Meteorological Society, 8 Aug. 2023, blog.ametsoc.org/2023/08/08/recent-trends-in-tropical-cyclone-fatalities-in-the-united-states/. \n[3] Crawford, Todd. “Florida Community Built to Be “Hurricane-Proof” Escapes Milton’s Wrath Almost Entirely Unscathed - Vision Times.” Vision Times, 16 Oct. 2024, www.visiontimes.com/2024/10/16/florida-community-built-to-be-hurricane-proof-escapes-miltons-wrath-almost-entirely-unscathed.html.\n[4] Gilford, Daniel M, et al. “Human-Caused Ocean Warming Has Intensified Recent Hurricanes.” Environmental Research Climate, vol. 3, no. 4, 20 Nov. 2024, pp. 045019–045019, iopscience.iop.org/article/10.1088/2752-5295/ad8d02, https://doi.org/10.1088/2752-5295/ad8d02.\n[5] “How This Florida Town Survived Hurricanes Irma, Ian, Helene, and Milton.” WSJ, wsj.com, 2025, www.wsj.com/video/series/pro-perfected/the-hidden-engineering-behind-the-hurricane-proof-florida-town/1E02F3C8-573B-456F-8E26-60B35539B549. Accessed 6 Jan. 2026.\n[6] Neuman, Scott. “One Florida Community Built to Weather Hurricanes Endured Ian with Barely a Scratch.” NPR.org, 6 Oct. 2022, www.npr.org/2022/10/05/1126900340/florida-community-designed-weather-hurricane-ian-babcock-ranch-solar.\n[7] Sherriff, Lucy. “Babcock Ranch: Florida’s First Hurricane-Proof Town.” www.BBC.com, 4 Sept. 2023, www.bbc.com/future/article/20230904-babcock-ranch-floridas-first-hurricane-proof-town."
+    }
+  ]
 }
