@@ -9,9 +9,42 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
+function slugifyValue(s) {
+  return String(s || "")
+    .toLowerCase()
+    .trim()
+    .replace(/['’"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function authorAnchorId(name) {
+  return `author-${slugifyValue(name)}`;
+}
+
+function authorUrl(name) {
+  return `/authors/?author=${encodeURIComponent(name)}#${authorAnchorId(name)}`;
+}
+
 function formatDate(iso) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
+  const s = String(iso || "").trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (m) {
+    const year = Number(m[1]);
+    const month = Number(m[2]) - 1;
+    const day = Number(m[3]);
+    const d = new Date(year, month, day);
+    return d.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric"
+    });
+  }
+
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s;
+
   return d.toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",
@@ -104,7 +137,10 @@ async function loadIssue() {
             <article class="article-card">
               <h3><a href="${articleUrl(slug, article.slug)}">${escapeHtml(article.title)}</a></h3>
               ${article.subtitle ? `<p class="muted">${escapeHtml(article.subtitle)}</p>` : ""}
-              <div class="article-meta">${escapeHtml(article.author)} · ${escapeHtml(formatDate(article.date))}</div>
+              <div class="article-meta">
+                <a class="author-link" href="${authorUrl(article.author)}">${escapeHtml(article.author)}</a>
+                · ${escapeHtml(formatDate(article.date))}
+              </div>
             </article>
           `).join("")}
         </div>

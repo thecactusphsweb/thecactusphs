@@ -38,6 +38,11 @@ function initHeader() {
   }
 }
 
+function getQueryParam(name) {
+  const params = new URLSearchParams(window.location.search);
+  return params.get(name) || "";
+}
+
 function showPageError(message) {
   const el = document.getElementById("page-error");
   if (!el) return;
@@ -59,9 +64,42 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
+function slugifyValue(s) {
+  return String(s || "")
+    .toLowerCase()
+    .trim()
+    .replace(/['’"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function authorAnchorId(name) {
+  return `author-${slugifyValue(name)}`;
+}
+
+function authorUrl(name) {
+  return `/authors/?author=${encodeURIComponent(name)}#${authorAnchorId(name)}`;
+}
+
 function formatDate(iso) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
+  const s = String(iso || "").trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (m) {
+    const year = Number(m[1]);
+    const month = Number(m[2]) - 1;
+    const day = Number(m[3]);
+    const d = new Date(year, month, day);
+    return d.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  }
+
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s;
+
   return d.toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",
@@ -136,7 +174,11 @@ function updateCurrentIssueNavLink(issues) {
 }
 
 function sortByDateDesc(list) {
-  return [...list].sort((a, b) => new Date(b.date) - new Date(a.date));
+  return [...list].sort((a, b) => {
+    const da = new Date(String(a.date).replace(/-/g, "/"));
+    const db = new Date(String(b.date).replace(/-/g, "/"));
+    return db - da;
+  });
 }
 
 function renderArticleCardHtml(article) {
@@ -147,9 +189,7 @@ function renderArticleCardHtml(article) {
       ${article.subtitle ? `<p class="muted">${escapeHtml(article.subtitle)}</p>` : ""}
       <div class="article-meta">
         ${escapeHtml(article.type || "Other")} · ${escapeHtml(formatDate(article.date))} ·
-        <a href="/authors/?author=${encodeURIComponent(article.author)}" style="color: var(--accent); text-decoration: none; font-weight: 950;">
-          ${escapeHtml(article.author)}
-        </a>
+        <a class="author-link" href="${authorUrl(article.author)}">${escapeHtml(article.author)}</a>
       </div>
     </article>
   `;
@@ -191,7 +231,7 @@ function renderHomeHeroThreeColumns(articles) {
           </div>
           <h1 class="hero-main-title"><a href="${articleUrl(main)}">${escapeHtml(main.title)}</a></h1>
           ${main.subtitle ? `<p class="hero-main-dek">${escapeHtml(main.subtitle)}</p>` : ""}
-          <p class="hero-main-byline">${escapeHtml(main.author)}</p>
+          <p class="hero-main-byline"><a class="author-link" href="${authorUrl(main.author)}">${escapeHtml(main.author)}</a></p>
         </div>
       </article>
     `;
@@ -207,7 +247,7 @@ function renderHomeHeroThreeColumns(articles) {
           ${escapeHtml(centerLead.category || "")}${centerLead.date ? " | " + escapeHtml(formatDate(centerLead.date)) : ""}
         </div>
         <h3 class="center-title"><a href="${articleUrl(centerLead)}">${escapeHtml(centerLead.title)}</a></h3>
-        <p class="center-meta">${escapeHtml(centerLead.author)}</p>
+        <p class="center-meta"><a class="author-link" href="${authorUrl(centerLead.author)}">${escapeHtml(centerLead.author)}</a></p>
       </article>
     `;
   }
@@ -219,7 +259,7 @@ function renderHomeHeroThreeColumns(articles) {
           ${escapeHtml(article.category || "")}${article.date ? " | " + escapeHtml(formatDate(article.date)) : ""}
         </div>
         <h3 class="center-card-title"><a href="${articleUrl(article)}">${escapeHtml(article.title)}</a></h3>
-        <p class="center-card-meta">${escapeHtml(article.author)}</p>
+        <p class="center-card-meta"><a class="author-link" href="${authorUrl(article.author)}">${escapeHtml(article.author)}</a></p>
       </article>
     `;
   });
@@ -231,7 +271,7 @@ function renderHomeHeroThreeColumns(articles) {
           ${escapeHtml(article.category || "")}${article.date ? " | " + escapeHtml(formatDate(article.date)) : ""}
         </div>
         <div class="right-title"><a href="${articleUrl(article)}">${escapeHtml(article.title)}</a></div>
-        <div class="right-meta">${escapeHtml(article.author)}</div>
+        <div class="right-meta"><a class="author-link" href="${authorUrl(article.author)}">${escapeHtml(article.author)}</a></div>
       </article>
     `;
   });
@@ -261,6 +301,7 @@ async function renderAuthorsPage() {
   const container = document.getElementById("authors-container");
   if (!container) return;
 
+  const authorFilter = getQueryParam("author");
   const issues = await loadIssuesList();
   const allArticles = [];
 
@@ -277,19 +318,32 @@ async function renderAuthorsPage() {
     map.get(name).push(a);
   });
 
+  let authorNames = Array.from(map.keys()).sort((a, b) => a.localeCompare(b));
+
+  if (authorFilter) {
+    authorNames = authorNames.filter(
+      (name) => name.toLowerCase() === authorFilter.toLowerCase()
+    );
+  }
+
   const wrapper = document.createElement("div");
   wrapper.className = "author-grid";
 
-  Array.from(map.keys()).sort((a, b) => a.localeCompare(b)).forEach((name) => {
-    const articles = map.get(name).sort((a, b) => new Date(b.date) - new Date(a.date));
+  authorNames.forEach((name) => {
+    const articles = map.get(name).sort((a, b) => {
+      const da = new Date(String(a.date).replace(/-/g, "/"));
+      const db = new Date(String(b.date).replace(/-/g, "/"));
+      return db - da;
+    });
 
     const block = document.createElement("section");
     block.className = "author-block";
+    block.id = authorAnchorId(name);
     block.innerHTML = `
       <div class="author-name">${escapeHtml(name)}</div>
       <div class="author-count">${articles.length} article${articles.length === 1 ? "" : "s"}</div>
       <div class="article-section-grid">
-        ${articles.slice(0, 8).map(renderArticleCardHtml).join("")}
+        ${articles.map(renderArticleCardHtml).join("")}
       </div>
     `;
 

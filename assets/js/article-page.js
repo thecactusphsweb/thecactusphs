@@ -9,9 +9,42 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
+function slugifyValue(s) {
+  return String(s || "")
+    .toLowerCase()
+    .trim()
+    .replace(/['’"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function authorAnchorId(name) {
+  return `author-${slugifyValue(name)}`;
+}
+
+function authorUrl(name) {
+  return `/authors/?author=${encodeURIComponent(name)}#${authorAnchorId(name)}`;
+}
+
 function formatDate(iso) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
+  const s = String(iso || "").trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (m) {
+    const year = Number(m[1]);
+    const month = Number(m[2]) - 1;
+    const day = Number(m[3]);
+    const d = new Date(year, month, day);
+    return d.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric"
+    });
+  }
+
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s;
+
   return d.toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",
@@ -86,7 +119,9 @@ async function loadArticle() {
       <h1 class="article-title">${escapeHtml(article.title)}</h1>
 
       <div class="article-meta-full">
-        ${escapeHtml(article.author)} · ${escapeHtml(formatDate(article.date))} · ${escapeHtml(article.category || article.type || "")}
+        <a class="author-link" href="${authorUrl(article.author)}">${escapeHtml(article.author)}</a>
+        · ${escapeHtml(formatDate(article.date))}
+        · ${escapeHtml(article.category || article.type || "")}
       </div>
 
       ${heroPath ? `<img class="article-hero-image" src="${heroPath}" alt="${escapeHtml(article.title)}">` : ""}
@@ -96,9 +131,9 @@ async function loadArticle() {
       <div class="article-body">${bodyHtml}</div>
 
       ${article.citationsText ? `
-        <section class="article-citations" style="margin-top:2rem;">
-          <h2 style="font-size:1.1rem; margin-bottom:0.5rem;">Citations</h2>
-          <div class="article-citations-body" style="white-space: pre-wrap; line-height: 1.6;">${escapeHtml(article.citationsText)}</div>
+        <section class="article-citations">
+          <h2>Citations</h2>
+          <div class="article-citations-body">${escapeHtml(article.citationsText)}</div>
         </section>
       ` : ""}
     </div>
