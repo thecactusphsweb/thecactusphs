@@ -39,19 +39,19 @@ body{
 }
 
 .header-top{
-  position: relative;
-  display:flex;
+  display:grid;
+  grid-template-columns: minmax(220px, 1fr) auto minmax(320px, 1fr);
   align-items:center;
-  justify-content:space-between;
+  gap:1.5rem;
   min-height:118px;
   padding:1rem 0 0.9rem;
 }
 
 .header-left{
+  justify-self:start;
   display:flex;
   align-items:center;
-  z-index:2;
-  min-width:180px;
+  min-width:0;
 }
 
 .header-date{
@@ -61,16 +61,13 @@ body{
 }
 
 .brand{
-  position:absolute;
-  left:50%;
-  top:50%;
-  transform:translate(-50%, -50%);
+  justify-self:center;
   display:flex;
   align-items:center;
   justify-content:center;
   gap:0.9rem;
   text-decoration:none;
-  z-index:1;
+  min-width:0;
 }
 
 .brand-logo{
@@ -91,15 +88,17 @@ body{
 }
 
 .header-search{
+  justify-self:end;
   display:flex;
   gap:0.7rem;
   align-items:center;
-  margin-left:auto;
-  z-index:2;
+  width:min(560px, 100%);
+  min-width:0;
 }
 
 .search-input{
-  width: min(560px, 40vw);
+  flex:1 1 auto;
+  min-width:0;
   padding:0.92rem 1rem;
   border-radius:0.9rem;
   border:1px solid var(--border);
@@ -109,13 +108,15 @@ body{
 }
 
 .search-button{
+  flex:0 0 auto;
   padding:0.9rem 1.15rem;
   border-radius:0.9rem;
-  border:1px solid var(--border);
-  background:#fff;
+  border:1px solid rgba(0,0,0,0.12);
+  background:var(--sand);
   cursor:pointer;
   font-weight:900;
   font-size:1rem;
+  color:#111;
 }
 
 .navbar{
@@ -613,31 +614,25 @@ body{
   }
 
   .header-top{
-    position:static;
-    flex-direction:column;
-    justify-content:center;
-    gap:1rem;
+    grid-template-columns:1fr;
+    justify-items:center;
+    text-align:center;
     min-height:auto;
     padding:1rem 0;
+    gap:1rem;
   }
 
-  .brand{
-    position:static;
-    transform:none;
+  .header-left,
+  .brand,
+  .header-search{
+    justify-self:center;
   }
 
   .brand-name{
     font-size:2.35rem;
   }
 
-  .header-left,
   .header-search{
-    min-width:0;
-    margin-left:0;
-    justify-content:center;
-  }
-
-  .search-input{
-    width:min(92vw, 520px);
+    width:min(92vw, 560px);
   }
 }
