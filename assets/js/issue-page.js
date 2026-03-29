@@ -58,6 +58,20 @@ async function loadPartials() {
   }
 }
 
+function resolvePdfUrl(slug, issue) {
+  const raw = issue.pdfUrl || "magazine.pdf";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith("/")) return raw;
+  return `/${slug}/${raw}`;
+}
+
+function resolveCoverUrl(slug, issue) {
+  const coverFilename = issue.coverFilename || "cover.jpg";
+  if (/^https?:\/\//i.test(coverFilename)) return coverFilename;
+  if (coverFilename.startsWith("/")) return coverFilename;
+  return `/${slug}/${coverFilename}`;
+}
+
 async function loadIssue() {
   const slug = window.location.pathname.split("/").filter(Boolean)[0];
   const issue = await fetchApiJson(`/api/issues/${encodeURIComponent(slug)}`);
@@ -100,14 +114,15 @@ async function loadIssue() {
     container.insertAdjacentHTML("beforeend", html);
   });
 
-  const coverFilename = issue.coverFilename || "cover.jpg";
+  const pdfUrl = resolvePdfUrl(slug, issue);
+  const coverUrl = resolveCoverUrl(slug, issue);
 
   container.insertAdjacentHTML("beforeend", `
     <section class="issue-pdf-section">
       <h3 class="article-section-title">Full Magazine</h3>
-      <a class="issue-pdf-card" href="/${slug}/magazine.pdf" target="_blank" rel="noopener noreferrer">
+      <a class="issue-pdf-card" href="${pdfUrl}" target="_blank" rel="noopener noreferrer">
         <div class="issue-pdf-cover-wrap">
-          <img class="issue-pdf-cover" src="/${slug}/${coverFilename}" alt="${escapeHtml(issue.title || slug)} PDF cover">
+          <img class="issue-pdf-cover" src="${coverUrl}" alt="${escapeHtml(issue.title || slug)} PDF cover">
         </div>
         <div class="issue-pdf-content">
           <div class="issue-pdf-label">View PDF Version of the Magazine</div>
