@@ -160,46 +160,48 @@ function renderHomeHeroThreeColumns(articles) {
   const centerContainer = document.getElementById("hero-center");
   const rightContainer = document.getElementById("hero-right");
 
-  if (!mainContainer || !centerContainer || !rightContainer || !articles.length) return;
+  if (!mainContainer || !centerContainer || !rightContainer) return;
 
-  const sorted = sortByDateDesc(articles);
+  const slotted = articles.filter(
+    (a) =>
+      a.frontPageSlot === "main" ||
+      a.frontPageSlot === "center-lead" ||
+      a.frontPageSlot === "center" ||
+      a.frontPageSlot === "right"
+  );
 
-  const main = sorted.find((a) => a.frontPageSlot === "main") || sorted[0];
-  const centerLead =
-    sorted.find((a) => a.slug !== main.slug && a.frontPageSlot === "center-lead") ||
-    sorted.find((a) => a.slug !== main.slug);
+  const main = slotted.find((a) => a.frontPageSlot === "main");
+  const centerLead = slotted.find((a) => a.frontPageSlot === "center-lead");
+  const centerCards = slotted.filter((a) => a.frontPageSlot === "center").slice(0, 3);
+  const rightCards = slotted.filter((a) => a.frontPageSlot === "right").slice(0, 6);
 
-  const centerCards = sorted
-    .filter((a) => a.slug !== main.slug && a.slug !== centerLead?.slug && a.frontPageSlot === "center")
-    .slice(0, 3);
-
-  const rightCards = sorted
-    .filter((a) => a.slug !== main.slug && a.slug !== centerLead?.slug && !centerCards.some((x) => x.slug === a.slug))
-    .slice(0, 6);
-
-  mainContainer.innerHTML = `
-    <article class="hero-main-article">
-      <div class="hero-main-image-wrap">
-        ${main.heroPath ? `<a href="${articleUrl(main)}"><img class="hero-main-image" src="${main.heroPath}" alt="${escapeHtml(main.title)}"></a>` : ""}
-      </div>
-      <div>
-        <div class="hero-main-kicker">
-          ${escapeHtml(main.category || "")}${main.date ? " | " + escapeHtml(formatDate(main.date)) : ""}
-        </div>
-        <h1 class="hero-main-title"><a href="${articleUrl(main)}">${escapeHtml(main.title)}</a></h1>
-        ${main.subtitle ? `<p class="hero-main-dek">${escapeHtml(main.subtitle)}</p>` : ""}
-        <p class="hero-main-byline">${escapeHtml(main.author)}</p>
-      </div>
-    </article>
-  `;
-
+  mainContainer.innerHTML = "";
   centerContainer.innerHTML = "";
+  rightContainer.innerHTML = "";
+
+  if (main) {
+    mainContainer.innerHTML = `
+      <article class="hero-main-article">
+        <div class="hero-main-image-wrap">
+          ${main.heroPath ? `<a href="${articleUrl(main)}"><img class="hero-main-image" src="${main.heroPath}" alt="${escapeHtml(main.title)}"></a>` : ""}
+        </div>
+        <div>
+          <div class="hero-main-kicker">
+            ${escapeHtml(main.category || "")}${main.date ? " | " + escapeHtml(formatDate(main.date)) : ""}
+          </div>
+          <h1 class="hero-main-title"><a href="${articleUrl(main)}">${escapeHtml(main.title)}</a></h1>
+          ${main.subtitle ? `<p class="hero-main-dek">${escapeHtml(main.subtitle)}</p>` : ""}
+          <p class="hero-main-byline">${escapeHtml(main.author)}</p>
+        </div>
+      </article>
+    `;
+  }
 
   if (centerLead) {
     centerContainer.innerHTML += `
       <article class="center-lead-card">
         <div class="center-lead-image-wrap">
-          ${centerLead.heroPath ? `<a href="${articleUrl(centerLead)}"><img class="center-lead-image" src="${centerLead.heroPath}" alt="${escapeHtml(centerLead.title)}"></a>` : "" }
+          ${centerLead.heroPath ? `<a href="${articleUrl(centerLead)}"><img class="center-lead-image" src="${centerLead.heroPath}" alt="${escapeHtml(centerLead.title)}"></a>` : ""}
         </div>
         <div class="center-kicker">
           ${escapeHtml(centerLead.category || "")}${centerLead.date ? " | " + escapeHtml(formatDate(centerLead.date)) : ""}
@@ -221,8 +223,6 @@ function renderHomeHeroThreeColumns(articles) {
       </article>
     `;
   });
-
-  rightContainer.innerHTML = "";
 
   rightCards.forEach((article) => {
     rightContainer.innerHTML += `
