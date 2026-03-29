@@ -150,10 +150,8 @@ async function loadIssueData(slug) {
 }
 
 function normalizeArticle(issueSlug, article) {
-  const heroPath =
-    article.imageUrl || article.heroFilename
-      ? `/${issueSlug}/${article.slug}/${article.heroFilename || article.imageUrl}`
-      : "";
+  const heroFile = article.heroFilename || article.imageUrl || "";
+  const heroPath = heroFile ? `/${issueSlug}/${article.slug}/${heroFile}` : "";
 
   return {
     ...article,
@@ -185,14 +183,58 @@ function renderArticleCardHtml(article) {
   const link = articleUrl(article);
   return `
     <article class="article-card">
-      <h3><a href="${link}">${escapeHtml(article.title)}</a></h3>
-      ${article.subtitle ? `<p class="muted">${escapeHtml(article.subtitle)}</p>` : ""}
-      <div class="article-meta">
-        ${escapeHtml(article.type || "Other")} · ${escapeHtml(formatDate(article.date))} ·
-        <a class="author-link" href="${authorUrl(article.author)}">${escapeHtml(article.author)}</a>
+      ${article.heroPath ? `
+        <a class="article-card-image-wrap" href="${link}">
+          <img class="article-card-image" src="${article.heroPath}" alt="${escapeHtml(article.title)}">
+        </a>
+      ` : ""}
+      <div class="article-card-content">
+        <h3><a href="${link}">${escapeHtml(article.title)}</a></h3>
+        ${article.subtitle ? `<p class="muted">${escapeHtml(article.subtitle)}</p>` : ""}
+        <div class="article-meta">
+          <a class="author-link" href="${authorUrl(article.author)}">${escapeHtml(article.author)}</a>
+          · ${escapeHtml(formatDate(article.date))}
+        </div>
       </div>
     </article>
   `;
+}
+
+function renderSearchSummary(container, query, count) {
+  const box = document.createElement("div");
+  box.className = "search-summary";
+  box.innerHTML = `
+    <div><strong>Search:</strong> “${escapeHtml(query)}”</div>
+    <div>${count} article result${count === 1 ? "" : "s"}</div>
+  `;
+  container.appendChild(box);
+}
+
+function searchArticles(query, articles) {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+
+  return articles
+    .map((article) => {
+      const haystack = [
+        article.title,
+        article.subtitle,
+        article.author,
+        article.category,
+        article.type,
+        ...(article.tags || [])
+      ].join(" ").toLowerCase();
+
+      let score = 0;
+      if ((article.title || "").toLowerCase().includes(q)) score += 4;
+      if ((article.author || "").toLowerCase().includes(q)) score += 3;
+      if (haystack.includes(q)) score += 1;
+
+      return { article, score };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score || new Date(String(b.article.date).replace(/-/g, "/")) - new Date(String(a.article.date).replace(/-/g, "/")))
+    .map((x) => x.article);
 }
 
 function renderHomeHeroThreeColumns(articles) {
@@ -281,7 +323,28 @@ async function renderArchivePage() {
   const grid = document.getElementById("issue-grid");
   if (!grid) return;
 
+  const query = getQueryParam("q").trim();
   const issues = await loadIssuesList();
+
+  if (query) {
+    const allArticles = [];
+    for (const issue of issues) {
+      const data = await loadIssueData(issue.slug);
+      allArticles.push(...data.articles.map((a) => normalizeArticle(issue.slug, a)));
+    }
+
+    const results = searchArticles(query, allArticles);
+
+    grid.innerHTML = "";
+    renderSearchSummary(grid, query, results.length);
+
+    const resultsWrap = document.createElement("div");
+    resultsWrap.className = "article-section-grid";
+    resultsWrap.innerHTML = results.map(renderArticleCardHtml).join("");
+    grid.appendChild(resultsWrap);
+    return;
+  }
+
   grid.innerHTML = "";
 
   issues.forEach((issue) => {

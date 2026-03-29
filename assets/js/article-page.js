@@ -26,6 +26,18 @@ function authorUrl(name) {
   return `/authors/?author=${encodeURIComponent(name)}#${authorAnchorId(name)}`;
 }
 
+function initHeader() {
+  const dateEl = document.getElementById("header-date");
+  if (dateEl) {
+    const now = new Date();
+    dateEl.textContent = now.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  }
+}
+
 function formatDate(iso) {
   const s = String(iso || "").trim();
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -85,6 +97,8 @@ async function loadPartials() {
     const yearSpan = document.getElementById("year");
     if (yearSpan) yearSpan.textContent = new Date().getFullYear();
   }
+
+  initHeader();
 }
 
 async function loadArticle() {
@@ -116,6 +130,8 @@ async function loadArticle() {
         <a href="/${encodeURIComponent(issueSlug)}/">${escapeHtml(issue.title || issueSlug)}</a>
       </div>
 
+      ${heroPath ? `<img class="article-hero-image" src="${heroPath}" alt="${escapeHtml(article.title)}">` : ""}
+
       <h1 class="article-title">${escapeHtml(article.title)}</h1>
 
       <div class="article-meta-full">
@@ -124,9 +140,7 @@ async function loadArticle() {
         · ${escapeHtml(article.category || article.type || "")}
       </div>
 
-      ${heroPath ? `<img class="article-hero-image" src="${heroPath}" alt="${escapeHtml(article.title)}">` : ""}
-
-      ${article.imageCaption ? `<div class="article-image-caption" style="margin-top:-0.6rem; margin-bottom:1rem; color:var(--muted); font-size:0.92rem;">${escapeHtml(article.imageCaption)}</div>` : ""}
+      ${article.imageCaption ? `<div class="article-image-caption" style="margin-top:-0.2rem; margin-bottom:1rem; color:var(--muted); font-size:0.92rem;">${escapeHtml(article.imageCaption)}</div>` : ""}
 
       <div class="article-body">${bodyHtml}</div>
 

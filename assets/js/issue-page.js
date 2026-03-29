@@ -26,6 +26,18 @@ function authorUrl(name) {
   return `/authors/?author=${encodeURIComponent(name)}#${authorAnchorId(name)}`;
 }
 
+function initHeader() {
+  const dateEl = document.getElementById("header-date");
+  if (dateEl) {
+    const now = new Date();
+    dateEl.textContent = now.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  }
+}
+
 function formatDate(iso) {
   const s = String(iso || "").trim();
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -89,6 +101,8 @@ async function loadPartials() {
     const yearSpan = document.getElementById("year");
     if (yearSpan) yearSpan.textContent = new Date().getFullYear();
   }
+
+  initHeader();
 }
 
 function resolvePdfUrl(slug, issue) {
@@ -103,6 +117,34 @@ function resolveCoverUrl(slug, issue) {
   if (/^https?:\/\//i.test(coverFilename)) return coverFilename;
   if (coverFilename.startsWith("/")) return coverFilename;
   return `/${slug}/${coverFilename}`;
+}
+
+function resolveHeroUrl(issueSlug, article) {
+  const heroFile = article.heroFilename || article.imageUrl || "";
+  return heroFile ? `/${issueSlug}/${article.slug}/${heroFile}` : "";
+}
+
+function renderArticleCardHtml(issueSlug, article) {
+  const link = articleUrl(issueSlug, article.slug);
+  const heroUrl = resolveHeroUrl(issueSlug, article);
+
+  return `
+    <article class="article-card">
+      ${heroUrl ? `
+        <a class="article-card-image-wrap" href="${link}">
+          <img class="article-card-image" src="${heroUrl}" alt="${escapeHtml(article.title)}">
+        </a>
+      ` : ""}
+      <div class="article-card-content">
+        <h3><a href="${link}">${escapeHtml(article.title)}</a></h3>
+        ${article.subtitle ? `<p class="muted">${escapeHtml(article.subtitle)}</p>` : ""}
+        <div class="article-meta">
+          <a class="author-link" href="${authorUrl(article.author)}">${escapeHtml(article.author)}</a>
+          · ${escapeHtml(formatDate(article.date))}
+        </div>
+      </div>
+    </article>
+  `;
 }
 
 async function loadIssue() {
@@ -133,16 +175,7 @@ async function loadIssue() {
       <section>
         <h3 class="article-section-title">${escapeHtml(typeName)}</h3>
         <div class="article-section-grid">
-          ${list.map((article) => `
-            <article class="article-card">
-              <h3><a href="${articleUrl(slug, article.slug)}">${escapeHtml(article.title)}</a></h3>
-              ${article.subtitle ? `<p class="muted">${escapeHtml(article.subtitle)}</p>` : ""}
-              <div class="article-meta">
-                <a class="author-link" href="${authorUrl(article.author)}">${escapeHtml(article.author)}</a>
-                · ${escapeHtml(formatDate(article.date))}
-              </div>
-            </article>
-          `).join("")}
+          ${list.map((article) => renderArticleCardHtml(slug, article)).join("")}
         </div>
       </section>
     `;
