@@ -137,10 +137,12 @@ function renderArticleCardHtml(issueSlug, article) {
       ` : ""}
       <div class="article-card-content">
         <h3><a href="${link}">${escapeHtml(article.title)}</a></h3>
-        ${article.subtitle ? `<p class="muted">${escapeHtml(article.subtitle)}</p>` : ""}
         <div class="article-meta">
+          <span class="article-type">${escapeHtml(article.type || "Article")}</span>
+          <span class="article-meta-sep">·</span>
+          <span>${escapeHtml(formatDate(article.date))}</span>
+          <span class="article-meta-sep">·</span>
           <a class="author-link" href="${authorUrl(article.author)}">${escapeHtml(article.author)}</a>
-          · ${escapeHtml(formatDate(article.date))}
         </div>
       </div>
     </article>

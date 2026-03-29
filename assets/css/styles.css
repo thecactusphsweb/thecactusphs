@@ -42,26 +42,44 @@ body{
   display:grid;
   grid-template-columns: 1fr auto 1fr;
   align-items:center;
-  gap:1.25rem;
-  padding:1.15rem 0 1rem;
+  gap:1.5rem;
+  min-height:128px;
+  padding:1.25rem 0 1.05rem;
+}
+
+.header-left{
+  justify-self:start;
+  display:flex;
+  flex-direction:column;
+  gap:0.28rem;
+}
+
+.header-kicker{
+  font-size:0.95rem;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:0.04em;
+  color:var(--ink);
 }
 
 .header-date{
-  color: var(--muted);
+  color: var(--ink);
   font-size:1rem;
-  font-weight:600;
+  font-weight:700;
 }
 
 .brand{
+  justify-self:center;
   display:flex;
   align-items:center;
-  gap:0.85rem;
+  justify-content:center;
+  gap:0.95rem;
   text-decoration:none;
 }
 
 .brand-logo{
-  width:56px;
-  height:56px;
+  width:60px;
+  height:60px;
   border-radius:1rem;
   object-fit:cover;
   box-shadow: 0 6px 16px rgba(0,0,0,0.10);
@@ -69,7 +87,7 @@ body{
 
 .brand-name{
   font-weight:1000;
-  font-size:3.05rem;
+  font-size:3rem;
   line-height:1;
   letter-spacing:0.01em;
   color:var(--ink);
@@ -83,8 +101,8 @@ body{
 }
 
 .search-input{
-  width: min(560px, 42vw);
-  padding:0.9rem 1rem;
+  width: min(560px, 40vw);
+  padding:0.92rem 1rem;
   border-radius:0.9rem;
   border:1px solid var(--border);
   background:#fff;
@@ -93,7 +111,7 @@ body{
 }
 
 .search-button{
-  padding:0.88rem 1.15rem;
+  padding:0.9rem 1.15rem;
   border-radius:0.9rem;
   border:1px solid var(--border);
   background:#fff;
@@ -184,7 +202,8 @@ body{
 .hero-main-kicker,
 .center-kicker,
 .right-kicker,
-.issue-pdf-label{
+.issue-pdf-label,
+.article-card-kicker{
   font-size:0.78rem;
   text-transform:uppercase;
   letter-spacing:0.14em;
@@ -287,11 +306,11 @@ body{
 }
 
 .article-card{
-  padding:0;
   overflow:hidden;
 }
 
 .article-card-image-wrap{
+  display:block;
   width:100%;
   aspect-ratio:16/9;
   overflow:hidden;
@@ -305,13 +324,30 @@ body{
 }
 
 .article-card-content{
-  padding:1.15rem 1.15rem 1.05rem;
+  padding:1rem 1rem 1.05rem;
 }
 
 .article-card h3{
   font-size:1.22rem;
-  margin-bottom:0.35rem;
-  line-height:1.22;
+  margin-bottom:0.55rem;
+  line-height:1.2;
+}
+
+.article-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:0.35rem;
+  align-items:center;
+  font-size:0.98rem;
+  color:var(--muted);
+}
+
+.article-meta-sep{
+  color:var(--muted);
+}
+
+.article-type{
+  color:var(--muted);
 }
 
 .issue-header{
@@ -582,6 +618,13 @@ body{
     grid-template-columns:1fr;
     justify-items:center;
     text-align:center;
+    min-height:auto;
+    padding:1rem 0;
+  }
+
+  .header-left,
+  .header-search{
+    justify-self:center;
   }
 
   .search-input{

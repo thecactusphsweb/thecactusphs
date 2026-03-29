@@ -190,10 +190,12 @@ function renderArticleCardHtml(article) {
       ` : ""}
       <div class="article-card-content">
         <h3><a href="${link}">${escapeHtml(article.title)}</a></h3>
-        ${article.subtitle ? `<p class="muted">${escapeHtml(article.subtitle)}</p>` : ""}
         <div class="article-meta">
+          <span class="article-type">${escapeHtml(article.type || "Article")}</span>
+          <span class="article-meta-sep">·</span>
+          <span>${escapeHtml(formatDate(article.date))}</span>
+          <span class="article-meta-sep">·</span>
           <a class="author-link" href="${authorUrl(article.author)}">${escapeHtml(article.author)}</a>
-          · ${escapeHtml(formatDate(article.date))}
         </div>
       </div>
     </article>
@@ -373,31 +375,19 @@ async function renderAuthorsPage() {
     allArticles.push(...data.articles.map((a) => normalizeArticle(issue.slug, a)));
   }
 
-  const map = new Map();
-
-  allArticles.forEach((a) => {
-    const name = a.author || "Unknown";
-    if (!map.has(name)) map.set(name, []);
-    map.get(name).push(a);
-  });
-
-  let authorNames = Array.from(map.keys()).sort((a, b) => a.localeCompare(b));
+  let authorNames = [...new Set(allArticles.map((a) => a.author || "Unknown"))].sort((a, b) => a.localeCompare(b));
 
   if (authorFilter) {
-    authorNames = authorNames.filter(
-      (name) => name.toLowerCase() === authorFilter.toLowerCase()
-    );
+    authorNames = authorNames.filter((name) => name.toLowerCase() === authorFilter.toLowerCase());
   }
 
   const wrapper = document.createElement("div");
   wrapper.className = "author-grid";
 
   authorNames.forEach((name) => {
-    const articles = map.get(name).sort((a, b) => {
-      const da = new Date(String(a.date).replace(/-/g, "/"));
-      const db = new Date(String(b.date).replace(/-/g, "/"));
-      return db - da;
-    });
+    const articles = allArticles
+      .filter((a) => (a.author || "Unknown") === name)
+      .sort((a, b) => new Date(String(b.date).replace(/-/g, "/")) - new Date(String(a.date).replace(/-/g, "/")));
 
     const block = document.createElement("section");
     block.className = "author-block";
