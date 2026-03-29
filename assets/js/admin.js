@@ -26,6 +26,8 @@ const editPreview = document.getElementById("edit-preview");
 const tabs = document.querySelectorAll(".admin-tab");
 const panels = document.querySelectorAll(".admin-tab-panel");
 
+let adminInitialized = false;
+
 function getAdminPassword() {
   return sessionStorage.getItem(AUTH_PASSWORD_KEY) || "";
 }
@@ -94,40 +96,6 @@ async function api(path, method = "GET", body = null, includeAdminPassword = fal
   return data;
 }
 
-async function requireAdminAccess() {
-  const existingPassword = getAdminPassword();
-  if (existingPassword) {
-    try {
-      await api("/api/auth", "POST", { password: existingPassword });
-      unlockAdmin();
-      return;
-    } catch {
-      clearAdminPassword();
-    }
-  }
-
-  lockAdmin();
-
-  await new Promise((resolve) => {
-    authForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      setAuthError("");
-
-      try {
-        const password = authPasswordInput.value;
-        await api("/api/auth", "POST", { password });
-        setAdminPassword(password);
-        authPasswordInput.value = "";
-        unlockAdmin();
-        setStatus("Authenticated.");
-        resolve();
-      } catch (err) {
-        setAuthError(err.message || "Incorrect password.");
-      }
-    }, { once: false });
-  });
-}
-
 function switchTab(tabId) {
   tabs.forEach((btn) => btn.classList.toggle("active", btn.dataset.tab === tabId));
   panels.forEach((panel) => panel.classList.toggle("active", panel.id === tabId));
@@ -156,6 +124,7 @@ function escapeHtml(str) {
   return String(str || "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
@@ -324,194 +293,242 @@ async function refreshArticlesForIssue(issueSlug) {
   });
 }
 
-issueForm.querySelector('input[name="title"]').addEventListener("input", (e) => {
-  const slugInput = issueForm.querySelector('input[name="slug"]');
-  if (!slugInput.dataset.manual) slugInput.value = slugify(e.target.value);
-});
-
-issueForm.querySelector('input[name="slug"]').addEventListener("input", (e) => {
-  e.target.dataset.manual = "1";
-});
-
-if (editIssueSelect) {
-  editIssueSelect.addEventListener("change", async () => {
-    if (!editIssueSelect.value) return;
-    await refreshArticlesForIssue(editIssueSelect.value);
+function setupStaticHandlers() {
+  issueForm.querySelector('input[name="title"]').addEventListener("input", (e) => {
+    const slugInput = issueForm.querySelector('input[name="slug"]');
+    if (!slugInput.dataset.manual) slugInput.value = slugify(e.target.value);
   });
+
+  issueForm.querySelector('input[name="slug"]').addEventListener("input", (e) => {
+    e.target.dataset.manual = "1";
+  });
+
+  if (editIssueSelect) {
+    editIssueSelect.addEventListener("change", async () => {
+      if (!editIssueSelect.value) return;
+      await refreshArticlesForIssue(editIssueSelect.value);
+    });
+  }
 }
 
 const createPreviewController = bindLivePreview(articleForm, createPreview);
 const editPreviewController = bindLivePreview(editArticleForm, editPreview);
 
-issueForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  try {
-    setStatus("Creating issue…");
-    const fd = new FormData(issueForm);
-    const cover = fd.get("cover");
+function setupFormHandlers() {
+  if (adminInitialized) return;
+  adminInitialized = true;
 
-    if (!(cover instanceof File) || !cover.size) {
-      throw new Error("Please upload a cover image.");
+  setupStaticHandlers();
+
+  issueForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      setStatus("Creating issue…");
+      const fd = new FormData(issueForm);
+      const cover = fd.get("cover");
+
+      if (!(cover instanceof File) || !cover.size) {
+        throw new Error("Please upload a cover image.");
+      }
+
+      const payload = {
+        title: fd.get("title"),
+        slug: fd.get("slug"),
+        dateLabel: fd.get("dateLabel"),
+        isCurrent: fd.get("isCurrent") === "on",
+        coverBase64: await fileToBase64(cover),
+        coverExtension: cover.name.split(".").pop()?.toLowerCase() || "jpg"
+      };
+
+      await api("/api/issues", "POST", payload, true);
+      issueForm.reset();
+      await refreshIssues();
+      setStatus("Issue created.");
+    } catch (err) {
+      setStatus(err.message, true);
     }
+  });
 
-    const payload = {
-      title: fd.get("title"),
-      slug: fd.get("slug"),
-      dateLabel: fd.get("dateLabel"),
-      isCurrent: fd.get("isCurrent") === "on",
-      coverBase64: await fileToBase64(cover),
-      coverExtension: cover.name.split(".").pop()?.toLowerCase() || "jpg"
-    };
+  articleForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      setStatus("Creating article…");
+      const fd = new FormData(articleForm);
+      const hero = fd.get("hero");
+      const tags = String(fd.get("tags") || "").split(",").map((x) => x.trim()).filter(Boolean);
+      const slot = String(fd.get("frontPageSlot") || "none");
 
-    await api("/api/issues", "POST", payload, true);
-    issueForm.reset();
+      const payload = {
+        issueSlug: fd.get("issueSlug"),
+        title: fd.get("title"),
+        subtitle: fd.get("subtitle"),
+        author: fd.get("author"),
+        date: fd.get("date"),
+        category: fd.get("category"),
+        type: fd.get("type"),
+        tags,
+        frontPageSlot: slot,
+        featuredMain: slot === "main",
+        sponsored: false,
+        imageCaption: fd.get("imageCaption"),
+        citationsText: fd.get("citationsText"),
+        bodyText: fd.get("bodyText")
+      };
+
+      if (hero instanceof File && hero.size) {
+        payload.heroBase64 = await fileToBase64(hero);
+        payload.heroExtension = hero.name.split(".").pop()?.toLowerCase() || "jpg";
+      }
+
+      await api("/api/articles", "POST", payload, true);
+      articleForm.reset();
+      createPreviewController.setImageUrl("");
+      await refreshIssues();
+      if (payload.issueSlug) {
+        await refreshArticlesForIssue(payload.issueSlug);
+      }
+      setStatus("Article created.");
+    } catch (err) {
+      setStatus(err.message, true);
+    }
+  });
+
+  currentForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      setStatus("Updating current issue…");
+      const fd = new FormData(currentForm);
+      await api("/api/issues/current", "POST", { slug: fd.get("currentSlug") }, true);
+      await refreshIssues();
+      setStatus("Current issue updated.");
+    } catch (err) {
+      setStatus(err.message, true);
+    }
+  });
+
+  loadArticleForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      const fd = new FormData(loadArticleForm);
+      const issueSlug = fd.get("issueSlug");
+      const articleId = Number(fd.get("articleId"));
+      const articles = issueArticlesCache.get(issueSlug) || [];
+      const article = articles.find((a) => Number(a.id) === articleId);
+      if (!article) throw new Error("Article not found.");
+
+      editArticleForm.elements.originalIssueSlug.value = issueSlug;
+      editArticleForm.elements.articleId.value = String(article.id);
+      editIssueTargetSelect.value = issueSlug;
+      editArticleForm.elements.title.value = article.title || "";
+      editArticleForm.elements.subtitle.value = article.subtitle || "";
+      editArticleForm.elements.author.value = article.author || "";
+      editArticleForm.elements.date.value = article.date || "";
+      editArticleForm.elements.category.value = article.category || "";
+      editArticleForm.elements.type.value = article.type || "Long Article";
+      editArticleForm.elements.tags.value = (article.tags || []).join(", ");
+      editArticleForm.elements.frontPageSlot.value = article.frontPageSlot || "none";
+      editArticleForm.elements.imageCaption.value = article.imageCaption || "";
+      editArticleForm.elements.citationsText.value = article.citationsText || "";
+
+      const html = await fetchArticleBodyHtml(issueSlug, article.id);
+      editArticleForm.elements.bodyText.value = storedHtmlToPlainText(html);
+
+      editPreviewController.setImageUrl(resolveIssueAssetPath(issueSlug, article.imageUrl || ""));
+      editPreviewController.update();
+
+      switchTab("edit-articles-tab");
+      setStatus("Article loaded.");
+    } catch (err) {
+      setStatus(err.message, true);
+    }
+  });
+
+  editArticleForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      setStatus("Saving article…");
+      const fd = new FormData(editArticleForm);
+      const hero = fd.get("hero");
+      const tags = String(fd.get("tags") || "").split(",").map((x) => x.trim()).filter(Boolean);
+
+      const payload = {
+        originalIssueSlug: fd.get("originalIssueSlug"),
+        issueSlug: fd.get("issueSlug"),
+        articleId: Number(fd.get("articleId")),
+        title: fd.get("title"),
+        subtitle: fd.get("subtitle"),
+        author: fd.get("author"),
+        date: fd.get("date"),
+        category: fd.get("category"),
+        type: fd.get("type"),
+        tags,
+        frontPageSlot: fd.get("frontPageSlot"),
+        featuredMain: fd.get("frontPageSlot") === "main",
+        sponsored: false,
+        imageCaption: fd.get("imageCaption"),
+        citationsText: fd.get("citationsText"),
+        bodyText: fd.get("bodyText")
+      };
+
+      if (hero instanceof File && hero.size) {
+        payload.heroBase64 = await fileToBase64(hero);
+        payload.heroExtension = hero.name.split(".").pop()?.toLowerCase() || "jpg";
+      }
+
+      await api("/api/articles/update", "POST", payload, true);
+      await refreshIssues();
+      if (editIssueSelect.value) {
+        await refreshArticlesForIssue(editIssueSelect.value);
+      }
+      setStatus("Article updated.");
+    } catch (err) {
+      setStatus(err.message, true);
+    }
+  });
+}
+
+async function initializeAdminApp() {
+  unlockAdmin();
+  setupFormHandlers();
+
+  try {
+    setStatus("Loading admin data…");
     await refreshIssues();
-    setStatus("Issue created.");
+    setStatus("Ready.");
   } catch (err) {
-    setStatus(err.message, true);
+    unlockAdmin();
+    setStatus(err.message || "Could not load admin data.", true);
   }
-});
-
-articleForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  try {
-    setStatus("Creating article…");
-    const fd = new FormData(articleForm);
-    const hero = fd.get("hero");
-    const tags = String(fd.get("tags") || "").split(",").map((x) => x.trim()).filter(Boolean);
-    const slot = String(fd.get("frontPageSlot") || "none");
-
-    const payload = {
-      issueSlug: fd.get("issueSlug"),
-      title: fd.get("title"),
-      subtitle: fd.get("subtitle"),
-      author: fd.get("author"),
-      date: fd.get("date"),
-      category: fd.get("category"),
-      type: fd.get("type"),
-      tags,
-      frontPageSlot: slot,
-      featuredMain: slot === "main",
-      sponsored: false,
-      imageCaption: fd.get("imageCaption"),
-      citationsText: fd.get("citationsText"),
-      bodyText: fd.get("bodyText")
-    };
-
-    if (hero instanceof File && hero.size) {
-      payload.heroBase64 = await fileToBase64(hero);
-      payload.heroExtension = hero.name.split(".").pop()?.toLowerCase() || "jpg";
-    }
-
-    await api("/api/articles", "POST", payload, true);
-    articleForm.reset();
-    createPreviewController.setImageUrl("");
-    await refreshIssues();
-    if (payload.issueSlug) {
-      await refreshArticlesForIssue(payload.issueSlug);
-    }
-    setStatus("Article created.");
-  } catch (err) {
-    setStatus(err.message, true);
-  }
-});
-
-currentForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  try {
-    setStatus("Updating current issue…");
-    const fd = new FormData(currentForm);
-    await api("/api/issues/current", "POST", { slug: fd.get("currentSlug") }, true);
-    await refreshIssues();
-    setStatus("Current issue updated.");
-  } catch (err) {
-    setStatus(err.message, true);
-  }
-});
-
-loadArticleForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  try {
-    const fd = new FormData(loadArticleForm);
-    const issueSlug = fd.get("issueSlug");
-    const articleId = Number(fd.get("articleId"));
-    const articles = issueArticlesCache.get(issueSlug) || [];
-    const article = articles.find((a) => Number(a.id) === articleId);
-    if (!article) throw new Error("Article not found.");
-
-    editArticleForm.elements.originalIssueSlug.value = issueSlug;
-    editArticleForm.elements.articleId.value = String(article.id);
-    editIssueTargetSelect.value = issueSlug;
-    editArticleForm.elements.title.value = article.title || "";
-    editArticleForm.elements.subtitle.value = article.subtitle || "";
-    editArticleForm.elements.author.value = article.author || "";
-    editArticleForm.elements.date.value = article.date || "";
-    editArticleForm.elements.category.value = article.category || "";
-    editArticleForm.elements.type.value = article.type || "Long Article";
-    editArticleForm.elements.tags.value = (article.tags || []).join(", ");
-    editArticleForm.elements.frontPageSlot.value = article.frontPageSlot || "none";
-    editArticleForm.elements.imageCaption.value = article.imageCaption || "";
-    editArticleForm.elements.citationsText.value = article.citationsText || "";
-
-    const html = await fetchArticleBodyHtml(issueSlug, article.id);
-    editArticleForm.elements.bodyText.value = storedHtmlToPlainText(html);
-
-    editPreviewController.setImageUrl(resolveIssueAssetPath(issueSlug, article.imageUrl || ""));
-    editPreviewController.update();
-
-    switchTab("edit-articles-tab");
-    setStatus("Article loaded.");
-  } catch (err) {
-    setStatus(err.message, true);
-  }
-});
-
-editArticleForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  try {
-    setStatus("Saving article…");
-    const fd = new FormData(editArticleForm);
-    const hero = fd.get("hero");
-    const tags = String(fd.get("tags") || "").split(",").map((x) => x.trim()).filter(Boolean);
-
-    const payload = {
-      originalIssueSlug: fd.get("originalIssueSlug"),
-      issueSlug: fd.get("issueSlug"),
-      articleId: Number(fd.get("articleId")),
-      title: fd.get("title"),
-      subtitle: fd.get("subtitle"),
-      author: fd.get("author"),
-      date: fd.get("date"),
-      category: fd.get("category"),
-      type: fd.get("type"),
-      tags,
-      frontPageSlot: fd.get("frontPageSlot"),
-      featuredMain: fd.get("frontPageSlot") === "main",
-      sponsored: false,
-      imageCaption: fd.get("imageCaption"),
-      citationsText: fd.get("citationsText"),
-      bodyText: fd.get("bodyText")
-    };
-
-    if (hero instanceof File && hero.size) {
-      payload.heroBase64 = await fileToBase64(hero);
-      payload.heroExtension = hero.name.split(".").pop()?.toLowerCase() || "jpg";
-    }
-
-    await api("/api/articles/update", "POST", payload, true);
-    await refreshIssues();
-    if (editIssueSelect.value) {
-      await refreshArticlesForIssue(editIssueSelect.value);
-    }
-    setStatus("Article updated.");
-  } catch (err) {
-    setStatus(err.message, true);
-  }
-});
+}
 
 async function boot() {
-  await requireAdminAccess();
-  await refreshIssues();
+  const existingPassword = getAdminPassword();
+  if (existingPassword) {
+    try {
+      await api("/api/auth", "POST", { password: existingPassword });
+      await initializeAdminApp();
+      return;
+    } catch {
+      clearAdminPassword();
+    }
+  }
+
+  lockAdmin();
+
+  authForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    setAuthError("");
+
+    try {
+      const password = authPasswordInput.value;
+      await api("/api/auth", "POST", { password });
+      setAdminPassword(password);
+      authPasswordInput.value = "";
+      await initializeAdminApp();
+    } catch (err) {
+      setAuthError(err.message || "Incorrect password.");
+    }
+  });
 }
 
 boot().catch((err) => {
