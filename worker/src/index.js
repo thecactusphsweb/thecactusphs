@@ -75,10 +75,18 @@ export default {
       if (url.pathname === "/api/article-body" && request.method === "GET") {
         const issueSlug = url.searchParams.get("issueSlug") || "";
         const articleId = Number(url.searchParams.get("articleId") || "");
-        if (!issueSlug || Number.isNaN(articleId)) return json({ error: "Missing issueSlug or articleId." }, 400);
+
+        if (!issueSlug || Number.isNaN(articleId)) {
+          return json({ error: "Missing issueSlug or articleId." }, 400);
+        }
+
         const issue = await readJsonFromGitHub(env, `${issueSlug}/issue.json`);
         const article = (issue.articles || []).find((a) => Number(a.id) === articleId);
-        if (!article) return json({ error: "Article not found." }, 404);
+
+        if (!article) {
+          return json({ error: "Article not found." }, 404);
+        }
+
         const html = await readTextFromGitHub(env, `${issueSlug}/${article.slug}/body.html`);
         return json({ html });
       }
@@ -115,7 +123,10 @@ export default {
 };
 
 function json(data, status = 200) {
-  return new Response(JSON.stringify(data, null, 2), { status, headers: CORS_HEADERS });
+  return new Response(JSON.stringify(data, null, 2), {
+    status,
+    headers: CORS_HEADERS
+  });
 }
 
 function ghHeaders(env) {
@@ -140,13 +151,22 @@ function decodeBase64Utf8(content) {
 }
 
 function slugifyValue(s) {
-  return String(s || "").toLowerCase().trim().replace(/['’"]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return String(s || "")
+    .toLowerCase()
+    .trim()
+    .replace(/['’"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function textToStoredHtml(text) {
   const clean = String(text || "").trim();
   if (!clean) return "";
-  return clean.split(/\n\s*\n/).map((para) => `<p>${escapeHtml(para).replace(/\n/g, "<br>")}</p>`).join("\n\n");
+
+  return clean
+    .split(/\n\s*\n/)
+    .map((para) => `<p>${escapeHtml(para).replace(/\n/g, "<br>")}</p>`)
+    .join("\n\n");
 }
 
 function escapeHtml(str) {
@@ -161,8 +181,10 @@ function escapeHtml(str) {
 async function githubGetContent(env, path) {
   const url = `https://api.github.com/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/contents/${path}?ref=${env.GITHUB_BRANCH}`;
   const res = await fetch(url, { headers: ghHeaders(env) });
+
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`GitHub GET failed for ${path}`);
+
   return res.json();
 }
 
@@ -180,18 +202,30 @@ async function readTextFromGitHub(env, path) {
 
 async function writeFileToGitHub(env, path, base64Content, message) {
   const existing = await githubGetContent(env, path);
-  const body = { message, content: base64Content, branch: env.GITHUB_BRANCH };
+
+  const body = {
+    message,
+    content: base64Content,
+    branch: env.GITHUB_BRANCH
+  };
+
   if (existing?.sha) body.sha = existing.sha;
+
   const url = `https://api.github.com/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/contents/${path}`;
   const res = await fetch(url, {
     method: "PUT",
-    headers: { ...ghHeaders(env), "Content-Type": "application/json" },
+    headers: {
+      ...ghHeaders(env),
+      "Content-Type": "application/json"
+    },
     body: JSON.stringify(body)
   });
+
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`GitHub PUT failed for ${path}: ${text}`);
   }
+
   return res.json();
 }
 
@@ -201,78 +235,277 @@ function safeExt(ext) {
 
 async function createIssue(env, body) {
   const { title, slug, dateLabel, isCurrent, coverBase64, coverExtension } = body;
-  if (!title || !slug || !dateLabel || !coverBase64) throw new Error("Missing required issue fields.");
+
+  if (!title || !slug || !dateLabel || !coverBase64) {
+    throw new Error("Missing required issue fields.");
+  }
+
   const issues = await readJsonFromGitHub(env, "assets/data/issues.json");
-  if (issues.some((x) => x.slug === slug)) throw new Error(`Issue slug already exists: ${slug}`);
-  if (isCurrent) issues.forEach((x) => { x.isCurrent = false; });
+
+  if (issues.some((x) => x.slug === slug)) {
+    throw new Error(`Issue slug already exists: ${slug}`);
+  }
+
+  if (isCurrent) {
+    issues.forEach((x) => { x.isCurrent = false; });
+  }
+
   const coverFilename = `cover.${safeExt(coverExtension)}`;
-  issues.unshift({ slug, title, dateLabel, coverImage: `${slug}/${coverFilename}`, pdfUrl: `${slug}/magazine.pdf`, isCurrent: !!isCurrent });
-  const issueJson = { slug, title, dateLabel, coverFilename, pdfUrl: "magazine.pdf", articles: [] };
-  await writeFileToGitHub(env, `${slug}/index.html`, b64FromUtf8(ISSUE_INDEX_HTML), `Create issue page for ${slug}`);
-  await writeFileToGitHub(env, `${slug}/issue.json`, b64FromUtf8(JSON.stringify(issueJson, null, 2)), `Create issue metadata for ${slug}`);
-  await writeFileToGitHub(env, `${slug}/${coverFilename}`, coverBase64, `Upload cover image for ${slug}`);
-  await writeFileToGitHub(env, "assets/data/issues.json", b64FromUtf8(JSON.stringify(issues, null, 2)), `Update issues list for ${slug}`);
+
+  issues.unshift({
+    slug,
+    title,
+    dateLabel,
+    coverImage: `${slug}/${coverFilename}`,
+    pdfUrl: `${slug}/magazine.pdf`,
+    isCurrent: !!isCurrent
+  });
+
+  const issueJson = {
+    slug,
+    title,
+    dateLabel,
+    coverFilename,
+    pdfUrl: "magazine.pdf",
+    articles: []
+  };
+
+  await writeFileToGitHub(
+    env,
+    `${slug}/index.html`,
+    b64FromUtf8(ISSUE_INDEX_HTML),
+    `Create issue page for ${slug}`
+  );
+
+  await writeFileToGitHub(
+    env,
+    `${slug}/issue.json`,
+    b64FromUtf8(JSON.stringify(issueJson, null, 2)),
+    `Create issue metadata for ${slug}`
+  );
+
+  await writeFileToGitHub(
+    env,
+    `${slug}/${coverFilename}`,
+    coverBase64,
+    `Upload cover image for ${slug}`
+  );
+
+  await writeFileToGitHub(
+    env,
+    "assets/data/issues.json",
+    b64FromUtf8(JSON.stringify(issues, null, 2)),
+    `Update issues list for ${slug}`
+  );
 }
 
 async function setCurrentIssue(env, slug) {
   const issues = await readJsonFromGitHub(env, "assets/data/issues.json");
   let found = false;
+
   issues.forEach((issue) => {
-    if (issue.slug === slug) { issue.isCurrent = true; found = true; }
-    else issue.isCurrent = false;
+    if (issue.slug === slug) {
+      issue.isCurrent = true;
+      found = true;
+    } else {
+      issue.isCurrent = false;
+    }
   });
+
   if (!found) throw new Error(`Issue not found: ${slug}`);
-  await writeFileToGitHub(env, "assets/data/issues.json", b64FromUtf8(JSON.stringify(issues, null, 2)), `Set current issue to ${slug}`);
+
+  await writeFileToGitHub(
+    env,
+    "assets/data/issues.json",
+    b64FromUtf8(JSON.stringify(issues, null, 2)),
+    `Set current issue to ${slug}`
+  );
 }
 
 async function createArticle(env, body) {
-  const { issueSlug, title, subtitle, author, date, category, type, tags, frontPageSlot, featuredMain, sponsored, imageCaption, citationsText, bodyText, heroBase64, heroExtension } = body;
-  if (!issueSlug || !title || !author || !date || !type || !bodyText) throw new Error("Missing required article fields.");
+  const {
+    issueSlug,
+    title,
+    subtitle,
+    author,
+    date,
+    category,
+    type,
+    tags,
+    frontPageSlot,
+    featuredMain,
+    sponsored,
+    imageCaption,
+    citationsText,
+    bodyText,
+    heroBase64,
+    heroExtension
+  } = body;
+
+  if (!issueSlug || !title || !author || !date || !type || !bodyText) {
+    throw new Error("Missing required article fields.");
+  }
+
   const issuePath = `${issueSlug}/issue.json`;
   const issueJson = await readJsonFromGitHub(env, issuePath);
   const articles = Array.isArray(issueJson.articles) ? issueJson.articles : [];
-  const nextId = articles.length ? Math.max(...articles.map((a) => Number(a.id) || 0)) + 1 : 1;
+
+  const nextId = articles.length
+    ? Math.max(...articles.map((a) => Number(a.id) || 0)) + 1
+    : 1;
+
   const articleSlug = slugifyValue(title) || String(nextId);
-  if (articles.some((a) => a.slug === articleSlug)) throw new Error(`Article slug already exists in this issue: ${articleSlug}`);
+
+  if (articles.some((a) => a.slug === articleSlug)) {
+    throw new Error(`Article slug already exists in this issue: ${articleSlug}`);
+  }
+
   const hasHero = typeof heroBase64 === "string" && heroBase64.length > 0;
   const heroFilename = hasHero ? `hero.${safeExt(heroExtension)}` : "";
+
   const articleObject = {
-    id: nextId, slug: articleSlug, title, subtitle: subtitle || "", author, date,
-    category: category || "", type, tags: Array.isArray(tags) ? tags : [],
-    featuredMain: !!featuredMain, sponsored: !!sponsored, frontPageSlot: frontPageSlot || "none",
-    imageUrl: heroFilename || "", heroFilename: heroFilename || "", imageCaption: imageCaption || "", citationsText: citationsText || ""
+    id: nextId,
+    slug: articleSlug,
+    title,
+    subtitle: subtitle || "",
+    author,
+    date,
+    category: category || "",
+    type,
+    tags: Array.isArray(tags) ? tags : [],
+    featuredMain: !!featuredMain,
+    sponsored: !!sponsored,
+    frontPageSlot: frontPageSlot || "none",
+    imageUrl: heroFilename || "",
+    heroFilename: heroFilename || "",
+    imageCaption: imageCaption || "",
+    citationsText: citationsText || ""
   };
+
   articles.push(articleObject);
   issueJson.articles = articles;
-  await writeFileToGitHub(env, `${issueSlug}/${articleSlug}/index.html`, b64FromUtf8(ARTICLE_INDEX_HTML), `Create article page for ${articleSlug}`);
-  await writeFileToGitHub(env, `${issueSlug}/${articleSlug}/body.html`, b64FromUtf8(textToStoredHtml(bodyText)), `Create article body for ${articleSlug}`);
-  if (hasHero) await writeFileToGitHub(env, `${issueSlug}/${articleSlug}/${heroFilename}`, heroBase64, `Upload hero image for ${articleSlug}`);
-  await writeFileToGitHub(env, issuePath, b64FromUtf8(JSON.stringify(issueJson, null, 2)), `Add article ${articleSlug} to ${issueSlug}`);
+
+  await writeFileToGitHub(
+    env,
+    `${issueSlug}/${articleSlug}/index.html`,
+    b64FromUtf8(ARTICLE_INDEX_HTML),
+    `Create article page for ${articleSlug}`
+  );
+
+  await writeFileToGitHub(
+    env,
+    `${issueSlug}/${articleSlug}/body.html`,
+    b64FromUtf8(textToStoredHtml(bodyText)),
+    `Create article body for ${articleSlug}`
+  );
+
+  if (hasHero) {
+    await writeFileToGitHub(
+      env,
+      `${issueSlug}/${articleSlug}/${heroFilename}`,
+      heroBase64,
+      `Upload hero image for ${articleSlug}`
+    );
+  }
+
+  await writeFileToGitHub(
+    env,
+    issuePath,
+    b64FromUtf8(JSON.stringify(issueJson, null, 2)),
+    `Add article ${articleSlug} to ${issueSlug}`
+  );
+
   return { articleId: nextId };
 }
 
 async function updateArticle(env, body) {
-  const { originalIssueSlug, issueSlug, articleId, title, subtitle, author, date, category, type, tags, frontPageSlot, featuredMain, sponsored, imageCaption, citationsText, bodyText, heroBase64, heroExtension } = body;
-  if (!originalIssueSlug || !issueSlug || !articleId) throw new Error("Missing issue/article identity for update.");
-  if (originalIssueSlug !== issueSlug) throw new Error("Moving articles across issues is not supported in this version.");
+  const {
+    originalIssueSlug,
+    issueSlug,
+    articleId,
+    title,
+    subtitle,
+    author,
+    date,
+    category,
+    type,
+    tags,
+    frontPageSlot,
+    featuredMain,
+    sponsored,
+    imageCaption,
+    citationsText,
+    bodyText,
+    heroBase64,
+    heroExtension
+  } = body;
+
+  if (!originalIssueSlug || !issueSlug || !articleId) {
+    throw new Error("Missing issue/article identity for update.");
+  }
+
+  if (originalIssueSlug !== issueSlug) {
+    throw new Error("Moving articles across issues is not supported in this version.");
+  }
+
   const issuePath = `${issueSlug}/issue.json`;
   const issueJson = await readJsonFromGitHub(env, issuePath);
   const articles = Array.isArray(issueJson.articles) ? issueJson.articles : [];
+
   const idx = articles.findIndex((a) => Number(a.id) === Number(articleId));
   if (idx === -1) throw new Error("Article not found.");
+
   const existing = articles[idx];
   const newSlug = slugifyValue(title) || existing.slug || String(articleId);
-  if (newSlug !== existing.slug) throw new Error("Changing article slug/folder is not supported in this version.");
+
+  if (newSlug !== existing.slug) {
+    throw new Error("Changing article slug/folder is not supported in this version.");
+  }
+
   const hasNewHero = typeof heroBase64 === "string" && heroBase64.length > 0;
   let heroFilename = existing.heroFilename || existing.imageUrl || "";
+
   if (hasNewHero) {
     heroFilename = `hero.${safeExt(heroExtension)}`;
-    await writeFileToGitHub(env, `${issueSlug}/${existing.slug}/${heroFilename}`, heroBase64, `Update hero image for ${existing.slug}`);
+    await writeFileToGitHub(
+      env,
+      `${issueSlug}/${existing.slug}/${heroFilename}`,
+      heroBase64,
+      `Update hero image for ${existing.slug}`
+    );
   }
-  articles[idx] = { ...existing, title, subtitle: subtitle || "", author, date, category: category || "", type,
-    tags: Array.isArray(tags) ? tags : [], featuredMain: !!featuredMain, sponsored: !!sponsored, frontPageSlot: frontPageSlot || "none",
-    imageUrl: heroFilename || "", heroFilename: heroFilename || "", imageCaption: imageCaption || "", citationsText: citationsText || "" };
+
+  articles[idx] = {
+    ...existing,
+    title,
+    subtitle: subtitle || "",
+    author,
+    date,
+    category: category || "",
+    type,
+    tags: Array.isArray(tags) ? tags : [],
+    featuredMain: !!featuredMain,
+    sponsored: !!sponsored,
+    frontPageSlot: frontPageSlot || "none",
+    imageUrl: heroFilename || "",
+    heroFilename: heroFilename || "",
+    imageCaption: imageCaption || "",
+    citationsText: citationsText || ""
+  };
+
   issueJson.articles = articles;
-  await writeFileToGitHub(env, `${issueSlug}/${existing.slug}/body.html`, b64FromUtf8(textToStoredHtml(bodyText)), `Update article body for ${existing.slug}`);
-  await writeFileToGitHub(env, issuePath, b64FromUtf8(JSON.stringify(issueJson, null, 2)), `Update article ${existing.slug} in ${issueSlug}`);
+
+  await writeFileToGitHub(
+    env,
+    `${issueSlug}/${existing.slug}/body.html`,
+    b64FromUtf8(textToStoredHtml(bodyText)),
+    `Update article body for ${existing.slug}`
+  );
+
+  await writeFileToGitHub(
+    env,
+    issuePath,
+    b64FromUtf8(JSON.stringify(issueJson, null, 2)),
+    `Update article ${existing.slug} in ${issueSlug}`
+  );
 }

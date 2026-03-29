@@ -1,3 +1,5 @@
+const API_BASE = "https://the-cactus-admin-api.thecactusphsweb.workers.dev";
+
 async function loadPartials() {
   const headerMount = document.getElementById("header-mount");
   const footerMount = document.getElementById("footer-mount");
@@ -16,6 +18,7 @@ async function loadPartials() {
     const res = await fetch("/partials/footer.html", { cache: "no-store" });
     if (!res.ok) throw new Error("Could not load footer");
     footerMount.innerHTML = await res.text();
+
     const yearSpan = document.getElementById("year");
     if (yearSpan) yearSpan.textContent = new Date().getFullYear();
   }
@@ -59,29 +62,66 @@ function escapeHtml(s) {
 function formatDate(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
-function issueUrl(issueSlug) { return `/${encodeURIComponent(issueSlug)}/`; }
-function articleUrl(article) { return `/${encodeURIComponent(article.issueSlug)}/${encodeURIComponent(article.slug)}/`; }
+function issueUrl(issueSlug) {
+  return `/${encodeURIComponent(issueSlug)}/`;
+}
 
-async function fetchJson(path) {
-  const res = await fetch(path, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Failed to load ${path}`);
-  return res.json();
+function articleUrl(article) {
+  return `/${encodeURIComponent(article.issueSlug)}/${encodeURIComponent(article.slug)}/`;
+}
+
+async function fetchApiJson(path) {
+  const res = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
+  const text = await res.text();
+
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { raw: text };
+  }
+
+  if (!res.ok) throw new Error(data.error || `Failed to load ${path}`);
+  return data;
 }
 
 async function loadIssuesList() {
   if (window.__CACTUS_ISSUES__) return window.__CACTUS_ISSUES__;
-  const issues = await fetchJson("/assets/data/issues.json");
-  window.__CACTUS_ISSUES__ = issues || [];
+  const data = await fetchApiJson("/api/issues");
+  window.__CACTUS_ISSUES__ = data.issues || [];
   return window.__CACTUS_ISSUES__;
 }
 
 async function loadIssueData(slug) {
-  const data = await fetchJson(`/${slug}/issue.json`);
-  const articles = Array.isArray(data.articles) ? data.articles : [];
-  return { slug, ...data, articles };
+  const data = await fetchApiJson(`/api/issues/${encodeURIComponent(slug)}`);
+  return {
+    slug,
+    title: data.title || slug,
+    dateLabel: data.dateLabel || "",
+    coverFilename: data.coverFilename || "cover.jpg",
+    pdfUrl: data.pdfUrl || "magazine.pdf",
+    articles: Array.isArray(data.articles) ? data.articles : []
+  };
+}
+
+function normalizeArticle(issueSlug, article) {
+  const heroPath =
+    article.imageUrl || article.heroFilename
+      ? `/${issueSlug}/${article.slug}/${article.heroFilename || article.imageUrl}`
+      : "";
+
+  return {
+    ...article,
+    issueSlug,
+    heroPath
+  };
 }
 
 function getCurrentIssueFromList(issues) {
@@ -93,6 +133,10 @@ function updateCurrentIssueNavLink(issues) {
   if (!link) return;
   const current = getCurrentIssueFromList(issues);
   if (current) link.href = issueUrl(current.slug);
+}
+
+function sortByDateDesc(list) {
+  return [...list].sort((a, b) => new Date(b.date) - new Date(a.date));
 }
 
 function renderArticleCardHtml(article) {
@@ -111,23 +155,24 @@ function renderArticleCardHtml(article) {
   `;
 }
 
-function sortByDateDesc(list) {
-  return [...list].sort((a, b) => new Date(b.date) - new Date(a.date));
-}
-
 function renderHomeHeroThreeColumns(articles) {
   const mainContainer = document.getElementById("hero-main");
   const centerContainer = document.getElementById("hero-center");
   const rightContainer = document.getElementById("hero-right");
+
   if (!mainContainer || !centerContainer || !rightContainer || !articles.length) return;
 
   const sorted = sortByDateDesc(articles);
+
   const main = sorted.find((a) => a.frontPageSlot === "main") || sorted[0];
-  const centerLead = sorted.find((a) => a.slug !== main.slug && a.frontPageSlot === "center-lead") ||
-                     sorted.find((a) => a.slug !== main.slug);
+  const centerLead =
+    sorted.find((a) => a.slug !== main.slug && a.frontPageSlot === "center-lead") ||
+    sorted.find((a) => a.slug !== main.slug);
+
   const centerCards = sorted
     .filter((a) => a.slug !== main.slug && a.slug !== centerLead?.slug && a.frontPageSlot === "center")
     .slice(0, 3);
+
   const rightCards = sorted
     .filter((a) => a.slug !== main.slug && a.slug !== centerLead?.slug && !centerCards.some((x) => x.slug === a.slug))
     .slice(0, 6);
@@ -135,7 +180,7 @@ function renderHomeHeroThreeColumns(articles) {
   mainContainer.innerHTML = `
     <article class="hero-main-article">
       <div class="hero-main-image-wrap">
-        ${main.imageUrl ? `<a href="${articleUrl(main)}"><img class="hero-main-image" src="/${main.issueSlug}/${main.slug}/${main.heroFilename || main.imageUrl}" alt="${escapeHtml(main.title)}"></a>` : ""}
+        ${main.heroPath ? `<a href="${articleUrl(main)}"><img class="hero-main-image" src="${main.heroPath}" alt="${escapeHtml(main.title)}"></a>` : ""}
       </div>
       <div>
         <div class="hero-main-kicker">
@@ -149,13 +194,16 @@ function renderHomeHeroThreeColumns(articles) {
   `;
 
   centerContainer.innerHTML = "";
+
   if (centerLead) {
     centerContainer.innerHTML += `
       <article class="center-lead-card">
         <div class="center-lead-image-wrap">
-          ${centerLead.imageUrl ? `<a href="${articleUrl(centerLead)}"><img class="center-lead-image" src="/${centerLead.issueSlug}/${centerLead.slug}/${centerLead.heroFilename || centerLead.imageUrl}" alt="${escapeHtml(centerLead.title)}"></a>` : ""}
+          ${centerLead.heroPath ? `<a href="${articleUrl(centerLead)}"><img class="center-lead-image" src="${centerLead.heroPath}" alt="${escapeHtml(centerLead.title)}"></a>` : "" }
         </div>
-        <div class="center-kicker">${escapeHtml(centerLead.category || "")}${centerLead.date ? " | " + escapeHtml(formatDate(centerLead.date)) : ""}</div>
+        <div class="center-kicker">
+          ${escapeHtml(centerLead.category || "")}${centerLead.date ? " | " + escapeHtml(formatDate(centerLead.date)) : ""}
+        </div>
         <h3 class="center-title"><a href="${articleUrl(centerLead)}">${escapeHtml(centerLead.title)}</a></h3>
         <p class="center-meta">${escapeHtml(centerLead.author)}</p>
       </article>
@@ -165,7 +213,9 @@ function renderHomeHeroThreeColumns(articles) {
   centerCards.forEach((article) => {
     centerContainer.innerHTML += `
       <article class="center-card">
-        <div class="center-kicker">${escapeHtml(article.category || "")}${article.date ? " | " + escapeHtml(formatDate(article.date)) : ""}</div>
+        <div class="center-kicker">
+          ${escapeHtml(article.category || "")}${article.date ? " | " + escapeHtml(formatDate(article.date)) : ""}
+        </div>
         <h3 class="center-card-title"><a href="${articleUrl(article)}">${escapeHtml(article.title)}</a></h3>
         <p class="center-card-meta">${escapeHtml(article.author)}</p>
       </article>
@@ -173,10 +223,13 @@ function renderHomeHeroThreeColumns(articles) {
   });
 
   rightContainer.innerHTML = "";
+
   rightCards.forEach((article) => {
     rightContainer.innerHTML += `
       <article class="right-card">
-        <div class="right-kicker">${escapeHtml(article.category || "")}${article.date ? " | " + escapeHtml(formatDate(article.date)) : ""}</div>
+        <div class="right-kicker">
+          ${escapeHtml(article.category || "")}${article.date ? " | " + escapeHtml(formatDate(article.date)) : ""}
+        </div>
         <div class="right-title"><a href="${articleUrl(article)}">${escapeHtml(article.title)}</a></div>
         <div class="right-meta">${escapeHtml(article.author)}</div>
       </article>
@@ -187,8 +240,10 @@ function renderHomeHeroThreeColumns(articles) {
 async function renderArchivePage() {
   const grid = document.getElementById("issue-grid");
   if (!grid) return;
+
   const issues = await loadIssuesList();
   grid.innerHTML = "";
+
   issues.forEach((issue) => {
     grid.innerHTML += `
       <article class="issue-card">
@@ -207,14 +262,16 @@ async function renderAuthorsPage() {
   if (!container) return;
 
   const issues = await loadIssuesList();
-  const all = [];
+  const allArticles = [];
+
   for (const issue of issues) {
     const data = await loadIssueData(issue.slug);
-    all.push(...data.articles.map((a) => ({ ...a, issueSlug: issue.slug })));
+    allArticles.push(...data.articles.map((a) => normalizeArticle(issue.slug, a)));
   }
 
   const map = new Map();
-  all.forEach((a) => {
+
+  allArticles.forEach((a) => {
     const name = a.author || "Unknown";
     if (!map.has(name)) map.set(name, []);
     map.get(name).push(a);
@@ -222,17 +279,20 @@ async function renderAuthorsPage() {
 
   const wrapper = document.createElement("div");
   wrapper.className = "author-grid";
-  Array.from(map.keys()).sort((a,b)=>a.localeCompare(b)).forEach((name) => {
-    const articles = map.get(name).sort((a,b)=>new Date(b.date)-new Date(a.date));
+
+  Array.from(map.keys()).sort((a, b) => a.localeCompare(b)).forEach((name) => {
+    const articles = map.get(name).sort((a, b) => new Date(b.date) - new Date(a.date));
+
     const block = document.createElement("section");
     block.className = "author-block";
     block.innerHTML = `
       <div class="author-name">${escapeHtml(name)}</div>
       <div class="author-count">${articles.length} article${articles.length === 1 ? "" : "s"}</div>
       <div class="article-section-grid">
-        ${articles.slice(0,8).map(renderArticleCardHtml).join("")}
+        ${articles.slice(0, 8).map(renderArticleCardHtml).join("")}
       </div>
     `;
+
     wrapper.appendChild(block);
   });
 
@@ -243,17 +303,21 @@ async function renderAuthorsPage() {
 document.addEventListener("DOMContentLoaded", async () => {
   try {
     await loadPartials();
+
     const issues = await loadIssuesList();
     updateCurrentIssueNavLink(issues);
 
     const page = document.body.dataset.page;
+
     if (page === "home") {
       const current = getCurrentIssueFromList(issues);
       if (!current) return;
+
       const data = await loadIssueData(current.slug);
-      const articles = data.articles.map((a) => ({ ...a, issueSlug: current.slug }));
+      const articles = data.articles.map((a) => normalizeArticle(current.slug, a));
       renderHomeHeroThreeColumns(articles);
     }
+
     if (page === "archive") await renderArchivePage();
     if (page === "authors") await renderAuthorsPage();
   } catch (err) {
