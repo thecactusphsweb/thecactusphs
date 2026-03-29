@@ -92,7 +92,7 @@ export default {
 
       return json({ error: "Not found" }, 404);
     } catch (err) {
-      return json({ error: err.message || String(err) }, 500);
+      return json({ error: err.message || String(err) }, err.status || 500);
     }
   }
 };
@@ -106,7 +106,9 @@ function json(data, status = 200) {
 
 function requireAdminPassword(request, env) {
   if (!env.ADMIN_PASSWORD) {
-    throw new Error("ADMIN_PASSWORD is not configured.");
+    const err = new Error("ADMIN_PASSWORD is not configured.");
+    err.status = 500;
+    throw err;
   }
 
   const supplied = request.headers.get("X-Admin-Password") || "";

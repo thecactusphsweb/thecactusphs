@@ -48,6 +48,21 @@ function getQueryParam(name) {
   return v ? v.trim() : "";
 }
 
+function getPathSegments() {
+  return window.location.pathname
+    .split("/")
+    .filter(Boolean)
+    .map((s) => decodeURIComponent(s));
+}
+
+function getIssueSlugFromUrl() {
+  return getQueryParam("issue") || getPathSegments()[0] || "";
+}
+
+function getArticleSlugFromUrl() {
+  return getQueryParam("article") || getPathSegments()[1] || "";
+}
+
 function normalize(s) {
   return String(s || "").toLowerCase().trim();
 }
@@ -85,12 +100,12 @@ function sortByDateDesc(list) {
 }
 
 function issueUrl(issueSlug) {
-  return `issue.html?issue=${encodeURIComponent(issueSlug)}`;
+  return `/${encodeURIComponent(issueSlug)}/`;
 }
 
 function articleUrl(article) {
   const articleSlug = article.slug || slugifyValue(article.title) || String(article.id);
-  return `article.html?issue=${encodeURIComponent(article.issueSlug)}&article=${encodeURIComponent(articleSlug)}`;
+  return `/${encodeURIComponent(article.issueSlug)}/${encodeURIComponent(articleSlug)}/`;
 }
 
 async function fetchApiJson(path) {
@@ -471,7 +486,7 @@ async function renderCurrentIssuePage() {
 }
 
 async function renderIssuePage() {
-  const slug = getQueryParam("issue");
+  const slug = getIssueSlugFromUrl();
   const q = getQueryParam("q");
 
   const issues = await loadIssuesList();
@@ -493,8 +508,8 @@ async function renderIssuePage() {
 }
 
 async function renderArticlePage() {
-  const issueSlug = getQueryParam("issue");
-  const articleSlug = getQueryParam("article");
+  const issueSlug = getIssueSlugFromUrl();
+  const articleSlug = getArticleSlugFromUrl();
   const legacyIdRaw = getQueryParam("id");
   const container = document.getElementById("article-container");
   if (!container) return;
