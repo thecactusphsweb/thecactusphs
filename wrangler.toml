@@ -1,8 +1,0 @@
-name = "the-cactus-admin-api"
-main = "src/index.js"
-compatibility_date = "2026-03-28"
-
-[vars]
-GITHUB_OWNER = "thecactusphsweb"
-GITHUB_REPO = "thecactusphs"
-GITHUB_BRANCH = "main"
