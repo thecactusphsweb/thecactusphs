@@ -93,3 +93,7 @@ Use a fine-grained GitHub token with repository contents write access for this r
 - Public pages are generated HTML, so Google sees real content immediately.
 - Admin login is password + signed cookie.
 - Public PDFs can still be uploaded manually by you.
+
+
+## Editing article content locally
+Edit files under `site/content/.../body.html`, then run `npm run build`. The built pages in `dist/` are regenerated from those source files.
