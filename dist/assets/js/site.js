@@ -1,0 +1,1 @@
+console.log("Static site build: no runtime content fetch required.");
