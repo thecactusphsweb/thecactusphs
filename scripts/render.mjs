@@ -79,7 +79,7 @@ export function renderHeader(currentNav = "", currentIssueHref = "/") {
       <img class="brand-logo" src="/assets/img/cactus-logo.jpg" alt="The Cactus logo" />
       <span class="brand-name">The Cactus</span>
     </a>
-    <form class="header-search" action="/archive/" method="GET">
+    <form class="header-search" action="/search/" method="GET">
       <input id="site-search-input" class="search-input" type="search" name="q" placeholder="Search articles…" />
       <button class="search-button" type="submit">Search</button>
     </form>
@@ -113,6 +113,7 @@ export function pageShell({ title, description, canonicalPath, currentNav = "", 
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="${escapeHtml(description)}" />
   <link rel="canonical" href="${canonical}" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
   <link rel="icon" href="/assets/img/favicon-48.png" type="image/png" sizes="48x48" />
   <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png" />
   <meta property="og:title" content="${escapeHtml(title)}" />
@@ -120,6 +121,7 @@ export function pageShell({ title, description, canonicalPath, currentNav = "", 
   <meta property="og:type" content="website" />
   <meta property="og:url" content="${canonical}" />
   <link rel="stylesheet" href="/assets/css/styles.css" />
+  <script defer src="/assets/js/site.js"></script>
   ${extraHead}
 </head>
 <body>

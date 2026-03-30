@@ -64,6 +64,7 @@ const issues = await loadContent(siteDir);
 await rm(distDir);
 await mkdir(distDir);
 await copyDir(path.join(siteDir, "assets"), path.join(distDir, "assets"));
+await fs.copyFile(path.join(siteDir, "assets/img/favicon.ico"), path.join(distDir, "favicon.ico"));
 await copyDir(path.join(siteDir, "admin"), path.join(distDir, "admin"));
 await copyDir(path.join(siteDir, "content"), distDir);
 
@@ -144,6 +145,36 @@ await fs.writeFile(path.join(distDir, "authors/index.html"), pageShell({
   currentNav: "authors",
   currentIssueHref,
   body: authorsBody
+}));
+
+
+const searchIndex = allArticles.map((article) => ({
+  title: article.title,
+  slug: article.slug,
+  issueSlug: article.issueSlug,
+  issueTitle: article.issueTitle,
+  author: article.author,
+  date: article.date,
+  category: article.category || "",
+  type: article.type || "",
+  heroFilename: article.heroFilename || article.imageUrl || ""
+}));
+await fs.writeFile(path.join(distDir, "assets/data/search-index.json"), JSON.stringify(searchIndex, null, 2));
+
+const searchBody = `
+<section class="section">
+  <div class="section-header"><h2 data-search-query>Search</h2><p>Find articles by title, author, or topic.</p></div>
+  <div class="search-summary" data-search-summary>Enter a search term to find articles.</div>
+  <div data-search-results></div>
+</section>`;
+await mkdir(path.join(distDir, "search"));
+await fs.writeFile(path.join(distDir, "search/index.html"), pageShell({
+  title: "The Cactus – Search",
+  description: "Search articles from The Cactus.",
+  canonicalPath: "/search/",
+  currentNav: "",
+  currentIssueHref,
+  body: searchBody
 }));
 
 for (const issue of issues) {
