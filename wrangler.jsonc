@@ -1,14 +1,12 @@
-// Rename API routes/domain values before deploying.
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
   "name": "the-cactus-admin-api",
   "main": "worker/src/index.js",
   "compatibility_date": "2026-03-29",
   "vars": {
-    "GITHUB_OWNER": "YOUR_GITHUB_USERNAME",
-    "GITHUB_REPO": "YOUR_REPO_NAME",
+    "GITHUB_OWNER": "thecactusphsweb",
+    "GITHUB_REPO": "thecactusphs",
     "GITHUB_BRANCH": "main",
-    "ALLOWED_ORIGINS": "https://your-domain.com,https://www.your-domain.com",
+    "ALLOWED_ORIGINS": "https://thecactusphs.com,https://www.thecactusphs.com,http://localhost:8788",
     "ADMIN_COOKIE_NAME": "cactus_admin_session",
     "COOKIE_SECURE": "true"
   }
