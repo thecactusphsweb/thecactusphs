@@ -1,5 +1,5 @@
 
-const API_BASE = window.__CACTUS_API_BASE__ || "http://localhost:8787";
+const API_BASE = window.__CACTUS_API_BASE__ || "https://api.YOUR-DOMAIN.com";
 
 const loginCard = document.getElementById("login-card");
 const adminApp = document.getElementById("admin-app");

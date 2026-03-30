@@ -125,8 +125,16 @@ for (const a of allArticles) {
   byAuthor.get(name).push(a);
 }
 
+const authorSortKey = (name) => {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "";
+  const last = parts[parts.length - 1].toLowerCase();
+  const first = parts.slice(0, -1).join(" ").toLowerCase();
+  return `${last}|${first}`;
+};
+
 const authorsBody = `<section class="section"><div class="section-header"><h2>Authors</h2><p>Browse by author.</p></div><div class="author-grid">
-${[...byAuthor.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([name, arts]) => `<section class="author-block" id="${authorAnchorId(name)}"><div class="author-name">${escapeHtml(name)}</div><div class="author-count">${arts.length} article${arts.length === 1 ? "" : "s"}</div><div class="article-section-grid">${arts.map((article) => renderArticleCardHtml(article)).join("")}</div></section>`).join("")}
+${[...byAuthor.entries()].sort((a, b) => authorSortKey(a[0]).localeCompare(authorSortKey(b[0]))).map(([name, arts]) => `<section class="author-block" id="${authorAnchorId(name)}"><div class="author-name">${escapeHtml(name)}</div><div class="author-count">${arts.length} article${arts.length === 1 ? "" : "s"}</div><div class="article-section-grid">${arts.map((article) => renderArticleCardHtml(article)).join("")}</div></section>`).join("")}
 </div></section>`;
 await mkdir(path.join(distDir, "authors"));
 await fs.writeFile(path.join(distDir, "authors/index.html"), pageShell({
