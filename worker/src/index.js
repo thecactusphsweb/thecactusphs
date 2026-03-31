@@ -194,15 +194,16 @@ function safeExt(ext) {
 }
 
 async function createIssue(env, body) {
-  const { title, slug, dateLabel, isCurrent, coverBase64, coverExtension } = body;
+  const { title, slug, dateLabel, pdfUrl, isCurrent, coverBase64, coverExtension } = body;
   const finalSlug = slugifyValue(slug || title);
   if (!title || !finalSlug || !dateLabel || !coverBase64) throw badRequest("Missing required issue fields.");
   const issues = await readJsonFromGitHub(env, "site/assets/data/issues.json");
   if (issues.some((x) => x.slug === finalSlug)) throw badRequest(`Issue slug already exists: ${finalSlug}`);
   if (isCurrent) issues.forEach((x) => { x.isCurrent = false; });
   const coverFilename = `cover.${safeExt(coverExtension)}`;
-  issues.unshift({ slug: finalSlug, title, dateLabel, coverImage: `${finalSlug}/${coverFilename}`, pdfUrl: `${finalSlug}/magazine.pdf`, isCurrent: !!isCurrent });
-  const issueJson = { slug: finalSlug, title, dateLabel, coverFilename, pdfUrl: `${finalSlug}/magazine.pdf`, articles: [] };
+  const finalPdfUrl = pdfUrl || `${finalSlug}/magazine.pdf`;
+  issues.unshift({ slug: finalSlug, title, dateLabel, coverImage: `${finalSlug}/${coverFilename}`, pdfUrl: finalPdfUrl, isCurrent: !!isCurrent });
+  const issueJson = { slug: finalSlug, title, dateLabel, coverFilename, pdfUrl: finalPdfUrl, articles: [] };
   await writeFileToGitHub(env, `site/content/${finalSlug}/issue.json`, b64FromUtf8(JSON.stringify(issueJson, null, 2)), `Create issue metadata for ${finalSlug}`);
   await writeFileToGitHub(env, `site/content/${finalSlug}/${coverFilename}`, coverBase64, `Upload cover image for ${finalSlug}`);
   await writeFileToGitHub(env, "site/assets/data/issues.json", b64FromUtf8(JSON.stringify(issues, null, 2)), `Update issues list for ${finalSlug}`);

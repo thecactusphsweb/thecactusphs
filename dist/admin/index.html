@@ -16,21 +16,10 @@
       <div class="admin-header">
         <div>
           <h1>The Cactus Admin</h1>
-          <p class="muted">Create issues, create articles, edit current articles, and choose the current issue.</p>
+          <p class="muted">Create issues, upload articles, edit existing articles, and choose the current issue.</p>
         </div>
-        <div id="admin-status" class="admin-status">Loading current site data…</div>
+        <div id="admin-status" class="admin-status">Ready.</div>
       </div>
-
-      <section class="admin-card admin-overview-card">
-        <div class="admin-overview-head">
-          <div>
-            <h2>Current Repository Content</h2>
-            <p class="muted">This comes from the published site, so your existing issue, articles, and PDF should appear here immediately.</p>
-          </div>
-          <button type="button" id="refresh-admin-data">Refresh</button>
-        </div>
-        <div id="admin-overview" class="admin-overview-grid"></div>
-      </section>
 
       <div class="admin-tabs">
         <button class="admin-tab active" data-tab="issues-tab">Create Issue</button>
@@ -41,12 +30,18 @@
 
       <section id="issues-tab" class="admin-tab-panel active">
         <div class="admin-card">
-          <h2>Create Issue</h2>
+          <div class="admin-card-head">
+            <div>
+              <h2>Create Issue</h2>
+              <p class="muted">The issue slug is generated automatically from the title.</p>
+            </div>
+          </div>
           <form id="issue-form" class="admin-form-grid">
             <label class="span-2">Issue Title <input name="title" required></label>
             <label>Issue Slug <input name="slug" required></label>
             <label>Date Label <input name="dateLabel" placeholder="January 7, 2026" required></label>
             <label class="span-2">Cover Image <input type="file" name="cover" accept="image/*" required></label>
+            <label class="span-2">PDF URL <input name="pdfUrl" placeholder="https://.../magazine.pdf"></label>
             <label class="checkbox-row span-2"><input type="checkbox" name="isCurrent"> Set as current issue</label>
             <div class="span-2 admin-actions-row"><button type="submit">Create Issue</button></div>
           </form>
@@ -54,87 +49,114 @@
       </section>
 
       <section id="articles-tab" class="admin-tab-panel">
-        <div class="admin-card">
-          <h2>Create Article</h2>
-          <form id="article-form" class="admin-form-grid">
-            <label>Issue <select id="issue-select" name="issueSlug" required></select></label>
-            <label>Author <input name="author" required></label>
-            <label class="span-2">Title <input name="title" required></label>
-            <label class="span-2">Subtitle <input name="subtitle"></label>
-            <label>Date <input name="date" type="date" required></label>
-            <label>Category <input name="category"></label>
-            <label>Type
-              <select name="type">
-                <option>Long Article</option>
-                <option>Interview</option>
-                <option>Opinion</option>
-                <option>Other</option>
-              </select>
-            </label>
-            <label>Front Page Slot
-              <select name="frontPageSlot">
-                <option value="none">None</option>
-                <option value="main">Main</option>
-                <option value="center-lead">Center Lead</option>
-                <option value="center">Center</option>
-                <option value="right">Right</option>
-              </select>
-            </label>
-            <label class="span-2">Tags <input name="tags" placeholder="engineering, physics"></label>
-            <label class="span-2">Hero Image <input type="file" name="hero" accept="image/*"></label>
-            <label class="span-2">Image Caption <input name="imageCaption"></label>
-            <label class="span-2">Body <textarea name="bodyText" rows="14" required></textarea></label>
-            <label class="span-2">Citations <textarea name="citationsText" rows="8"></textarea></label>
-            <div class="span-2 admin-actions-row"><button type="submit">Create Article</button></div>
-          </form>
+        <div class="admin-editor-layout">
+          <div class="admin-card">
+            <div class="admin-card-head">
+              <div>
+                <h2>Create Article</h2>
+                <p class="muted">Choose an issue, fill out the article fields, and watch the preview update on the right.</p>
+              </div>
+            </div>
+            <form id="article-form" class="admin-form-grid">
+              <label>Issue <select id="issue-select" name="issueSlug" required></select></label>
+              <label>Author <input name="author" required></label>
+              <label class="span-2">Title <input name="title" required></label>
+              <label class="span-2">Subtitle <input name="subtitle"></label>
+              <label>Date <input name="date" type="date" required></label>
+              <label>Category <input name="category"></label>
+              <label>Type
+                <select name="type">
+                  <option>Long Article</option>
+                  <option>Interview</option>
+                  <option>Opinion</option>
+                  <option>Other</option>
+                </select>
+              </label>
+              <label>Front Page Slot
+                <select name="frontPageSlot">
+                  <option value="none">None</option>
+                  <option value="main">Main</option>
+                  <option value="center-lead">Center Lead</option>
+                  <option value="center">Center</option>
+                  <option value="right">Right</option>
+                </select>
+              </label>
+              <label class="span-2">Tags <input name="tags" placeholder="engineering, physics"></label>
+              <label class="span-2">Hero Image <input type="file" name="hero" accept="image/*"></label>
+              <label class="span-2">Image Caption <input name="imageCaption"></label>
+              <label class="span-2">Body <textarea name="bodyText" rows="14" required></textarea></label>
+              <label class="span-2">Citations <textarea name="citationsText" rows="8"></textarea></label>
+              <div class="span-2 admin-actions-row"><button type="submit">Create Article</button></div>
+            </form>
+          </div>
+          <aside class="admin-card admin-preview-card">
+            <div class="admin-card-head"><h2>Live Preview</h2></div>
+            <div id="create-article-preview" class="admin-article-preview"></div>
+          </aside>
         </div>
       </section>
 
       <section id="edit-tab" class="admin-tab-panel">
-        <div class="admin-card">
-          <h2>Edit Article</h2>
-          <form id="edit-load-form" class="admin-form-grid admin-subform">
-            <label>Issue <select id="edit-issue-select" name="issueSlug" required></select></label>
-            <label>Article <select id="edit-article-select" name="articleSlug" required></select></label>
-            <div class="span-2 admin-actions-row"><button type="submit">Load Article</button></div>
-          </form>
-          <form id="edit-article-form" class="admin-form-grid" hidden>
-            <label>Slug <input name="slug" readonly></label>
-            <label>Author <input name="author" required></label>
-            <label class="span-2">Title <input name="title" required></label>
-            <label class="span-2">Subtitle <input name="subtitle"></label>
-            <label>Date <input name="date" type="date" required></label>
-            <label>Category <input name="category"></label>
-            <label>Type
-              <select name="type">
-                <option>Long Article</option>
-                <option>Interview</option>
-                <option>Opinion</option>
-                <option>Other</option>
-              </select>
-            </label>
-            <label>Front Page Slot
-              <select name="frontPageSlot">
-                <option value="none">None</option>
-                <option value="main">Main</option>
-                <option value="center-lead">Center Lead</option>
-                <option value="center">Center</option>
-                <option value="right">Right</option>
-              </select>
-            </label>
-            <label class="span-2">Tags <input name="tags" placeholder="engineering, physics"></label>
-            <label class="span-2">Replace Hero Image <input type="file" name="hero" accept="image/*"></label>
-            <label class="span-2">Image Caption <input name="imageCaption"></label>
-            <label class="span-2">Body <textarea name="bodyText" rows="14" required></textarea></label>
-            <label class="span-2">Citations <textarea name="citationsText" rows="8"></textarea></label>
-            <div class="span-2 admin-actions-row"><button type="submit">Save Article Changes</button></div>
-          </form>
+        <div class="admin-editor-layout">
+          <div class="admin-card">
+            <div class="admin-card-head">
+              <div>
+                <h2>Edit Article</h2>
+                <p class="muted">Load an existing article, make changes, and preview the updated layout on the right.</p>
+              </div>
+            </div>
+            <form id="edit-load-form" class="admin-form-grid admin-subform">
+              <label>Issue <select id="edit-issue-select" name="issueSlug" required></select></label>
+              <label>Article <select id="edit-article-select" name="articleSlug" required></select></label>
+              <div class="span-2 admin-actions-row"><button type="submit">Load Article</button></div>
+            </form>
+            <form id="edit-article-form" class="admin-form-grid" hidden>
+              <label>Slug <input name="slug" readonly></label>
+              <label>Author <input name="author" required></label>
+              <label class="span-2">Title <input name="title" required></label>
+              <label class="span-2">Subtitle <input name="subtitle"></label>
+              <label>Date <input name="date" type="date" required></label>
+              <label>Category <input name="category"></label>
+              <label>Type
+                <select name="type">
+                  <option>Long Article</option>
+                  <option>Interview</option>
+                  <option>Opinion</option>
+                  <option>Other</option>
+                </select>
+              </label>
+              <label>Front Page Slot
+                <select name="frontPageSlot">
+                  <option value="none">None</option>
+                  <option value="main">Main</option>
+                  <option value="center-lead">Center Lead</option>
+                  <option value="center">Center</option>
+                  <option value="right">Right</option>
+                </select>
+              </label>
+              <label class="span-2">Tags <input name="tags" placeholder="engineering, physics"></label>
+              <label class="span-2">Replace Hero Image <input type="file" name="hero" accept="image/*"></label>
+              <label class="span-2">Image Caption <input name="imageCaption"></label>
+              <label class="span-2">Body <textarea name="bodyText" rows="14" required></textarea></label>
+              <label class="span-2">Citations <textarea name="citationsText" rows="8"></textarea></label>
+              <div class="span-2 admin-actions-row"><button type="submit">Save Article Changes</button></div>
+            </form>
+          </div>
+          <aside class="admin-card admin-preview-card">
+            <div class="admin-card-head"><h2>Live Preview</h2></div>
+            <div id="edit-article-preview" class="admin-article-preview"></div>
+          </aside>
         </div>
       </section>
 
       <section id="current-tab" class="admin-tab-panel">
-        <div class="admin-card">
-          <h2>Set Current Issue</h2>
+        <div class="admin-card admin-card-narrow">
+          <div class="admin-card-head">
+            <div>
+              <h2>Current Issue</h2>
+              <p class="muted">Choose which issue appears as the current issue on the site.</p>
+            </div>
+          </div>
           <form id="current-form" class="admin-form-grid">
             <label class="span-2">Current Issue <select id="current-issue-select" name="currentSlug" required></select></label>
             <div class="span-2 admin-actions-row"><button type="submit">Update Current Issue</button></div>

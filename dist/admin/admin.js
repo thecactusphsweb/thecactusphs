@@ -2,9 +2,6 @@ const API_BASE = window.__CACTUS_API_BASE__ || "https://the-cactus-admin-api.the
 
 const adminApp = document.getElementById("admin-app");
 const statusEl = document.getElementById("admin-status");
-const overviewEl = document.getElementById("admin-overview");
-const refreshButton = document.getElementById("refresh-admin-data");
-const currentIssuePreview = document.getElementById("current-issue-preview");
 const bootstrapEl = document.getElementById("admin-bootstrap");
 
 const issueForm = document.getElementById("issue-form");
@@ -21,6 +18,9 @@ const tabs = document.querySelectorAll(".admin-tab[data-tab]");
 const panels = document.querySelectorAll(".admin-tab-panel");
 const issueTitleInput = issueForm?.querySelector('input[name="title"]');
 const issueSlugInput = issueForm?.querySelector('input[name="slug"]');
+const createPreview = document.getElementById("create-article-preview");
+const editPreview = document.getElementById("edit-article-preview");
+const currentIssuePreview = document.getElementById("current-issue-preview");
 
 let issuesCache = [];
 let loadedArticleKey = "";
@@ -33,11 +33,12 @@ try {
   bootstrapIssues = [];
 }
 
-function setStatus(message, isError = false) {
+function setStatus(message, kind = "info") {
   if (!statusEl) return;
   statusEl.textContent = message;
-  statusEl.classList.toggle("is-error", isError);
-  statusEl.classList.toggle("is-success", !isError);
+  statusEl.classList.remove("is-error", "is-success");
+  if (kind === "error") statusEl.classList.add("is-error");
+  if (kind === "success") statusEl.classList.add("is-success");
 }
 
 function switchTab(tabId) {
@@ -46,9 +47,8 @@ function switchTab(tabId) {
 }
 
 tabs.forEach((btn) => btn.addEventListener("click", () => switchTab(btn.dataset.tab)));
-refreshButton?.addEventListener("click", () => init(true));
 
-async function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
+async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -70,18 +70,6 @@ async function api(path, method = "GET", body = null) {
   try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
   if (!res.ok) throw new Error(data.error || `Request failed: ${res.status}`);
   return data;
-}
-
-async function fetchJson(path) {
-  const res = await fetchWithTimeout(path, { credentials: "same-origin" }, 8000);
-  if (!res.ok) throw new Error(`Static fetch failed: ${path}`);
-  return res.json();
-}
-
-async function fetchText(path) {
-  const res = await fetchWithTimeout(path, { credentials: "same-origin" }, 8000);
-  if (!res.ok) throw new Error(`Static fetch failed: ${path}`);
-  return res.text();
 }
 
 function slugify(text) {
@@ -143,72 +131,86 @@ function setFormValue(form, name, value) {
   if (field) field.value = value ?? "";
 }
 
-async function loadIssueSummariesStatic() {
-  try {
-    return await fetchJson("/assets/data/issues.json");
-  } catch {
-    return bootstrapIssues.map(({ slug, title, dateLabel, coverImage, pdfUrl, isCurrent }) => ({ slug, title, dateLabel, coverImage, pdfUrl, isCurrent }));
-  }
+function normalizeBootstrapIssue(issue) {
+  return {
+    slug: issue.slug,
+    title: issue.title,
+    dateLabel: issue.dateLabel || "",
+    coverImage: issue.coverImage || "",
+    coverFilename: issue.coverFilename || (issue.coverImage ? issue.coverImage.split("/").pop() : "cover.png"),
+    pdfUrl: issue.pdfUrl || "",
+    isCurrent: !!issue.isCurrent,
+    articles: (issue.articles || []).map((article) => ({
+      id: article.id,
+      slug: article.slug,
+      title: article.title || "",
+      subtitle: article.subtitle || "",
+      author: article.author || "",
+      date: article.date || "",
+      category: article.category || "",
+      type: article.type || "Long Article",
+      tags: article.tags || [],
+      frontPageSlot: article.frontPageSlot || "none",
+      imageCaption: article.imageCaption || "",
+      citationsText: article.citationsText || "",
+      bodyText: article.bodyText || "",
+      issueSlug: issue.slug,
+      issueTitle: issue.title
+    }))
+  };
 }
 
-async function loadIssueDetailsStatic(slug) {
-  const boot = bootstrapIssues.find((issue) => issue.slug === slug);
-  try {
-    return await fetchJson(`/${slug}/issue.json`);
-  } catch {
-    if (boot) return boot;
-    throw new Error(`Unable to load issue details for ${slug}.`);
-  }
+function articlePreviewHtml(data, issueTitle = "") {
+  const tags = (data.tags || []).filter(Boolean);
+  const body = String(data.bodyText || "").trim();
+  const bodyHtml = body
+    ? body.split(/\n\s*\n/).map((p) => `<p>${escapeHtml(p).replace(/\n/g, "<br>")}</p>`).join("")
+    : '<p class="muted">Article body preview appears here.</p>';
+  const citations = String(data.citationsText || "").trim();
+  return `
+    <article class="admin-preview-article">
+      <div class="admin-preview-kicker">${escapeHtml(data.category || data.type || "Article")} ${issueTitle ? `· ${escapeHtml(issueTitle)}` : ""}</div>
+      <h3 class="admin-preview-title">${escapeHtml(data.title || "Untitled Article")}</h3>
+      ${data.subtitle ? `<div class="admin-preview-subtitle">${escapeHtml(data.subtitle)}</div>` : ""}
+      <div class="admin-preview-meta">${escapeHtml(data.author || "Author Name")} ${data.date ? `· ${escapeHtml(data.date)}` : ""}</div>
+      ${tags.length ? `<div class="admin-preview-tags">${tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div>` : ""}
+      <div class="admin-preview-body">${bodyHtml}</div>
+      ${citations ? `<section class="admin-preview-citations"><h4>Citations</h4><pre>${escapeHtml(citations)}</pre></section>` : ""}
+    </article>`;
 }
 
-async function loadArticleBody(issueSlug, articleSlug) {
-  try {
-    const html = await fetchText(`/${issueSlug}/${articleSlug}/body.html`);
-    return html
-      .replace(/<\s*br\s*\/?>/gi, "\n")
-      .replace(/<\/p>\s*<p>/gi, "\n\n")
-      .replace(/<\/p>/gi, "")
-      .replace(/<p>/gi, "")
-      .replace(/<[^>]+>/g, "")
-      .replace(/&nbsp;/g, " ")
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"')
-      .replace(/&#039;/g, "'")
-      .trim();
-  } catch {
-    const article = articleFromCache(issueSlug, articleSlug);
-    return article?.bodyText || "";
-  }
+function getArticleDataFromForm(form) {
+  const fd = new FormData(form);
+  return {
+    issueSlug: fd.get("issueSlug") || editIssueSelect?.value || "",
+    author: String(fd.get("author") || ""),
+    title: String(fd.get("title") || ""),
+    subtitle: String(fd.get("subtitle") || ""),
+    date: String(fd.get("date") || ""),
+    category: String(fd.get("category") || ""),
+    type: String(fd.get("type") || "Long Article"),
+    tags: String(fd.get("tags") || "").split(",").map((x) => x.trim()).filter(Boolean),
+    bodyText: String(fd.get("bodyText") || ""),
+    citationsText: String(fd.get("citationsText") || "")
+  };
 }
 
-function renderOverview() {
-  if (!overviewEl) return;
-  if (!issuesCache.length) {
-    overviewEl.innerHTML = '<p class="muted">No issues found.</p>';
+function renderCreatePreview() {
+  if (!createPreview) return;
+  const data = getArticleDataFromForm(articleForm);
+  const issueTitle = issueFromCache(data.issueSlug)?.title || "";
+  createPreview.innerHTML = articlePreviewHtml(data, issueTitle);
+}
+
+function renderEditPreview() {
+  if (!editPreview) return;
+  if (editArticleForm?.hidden) {
+    editPreview.innerHTML = '<p class="muted">Load an article to preview and edit it here.</p>';
     return;
   }
-  overviewEl.innerHTML = issuesCache.map((issue) => {
-    const pdfHref = issue.pdfUrl || "";
-    const articles = issue.articles || [];
-    return `
-      <article class="admin-issue-overview ${issue.isCurrent ? "is-current" : ""}">
-        <div class="admin-issue-top">
-          <div>
-            <div class="admin-issue-title-row">
-              <h3>${escapeHtml(issue.title)}</h3>
-              ${issue.isCurrent ? '<span class="admin-pill">Current</span>' : ""}
-            </div>
-            <div class="admin-issue-meta">${escapeHtml(issue.slug)} · ${escapeHtml(issue.dateLabel || "")}</div>
-          </div>
-          ${pdfHref ? `<a class="admin-link-button" href="${escapeHtml(pdfHref)}" target="_blank" rel="noopener noreferrer">Open PDF</a>` : '<span class="admin-muted-chip">No PDF linked</span>'}
-        </div>
-        <div class="admin-article-mini-list">
-          ${articles.length ? articles.map((article) => `<div class="admin-article-mini-item"><strong>${escapeHtml(article.title)}</strong><span>${escapeHtml(article.author || "")}</span></div>`).join("") : '<div class="muted">No articles yet.</div>'}
-        </div>
-      </article>`;
-  }).join("");
+  const data = getArticleDataFromForm(editArticleForm);
+  const issueTitle = issueFromCache(editIssueSelect?.value)?.title || "";
+  editPreview.innerHTML = articlePreviewHtml(data, issueTitle);
 }
 
 function renderCurrentIssuePreview() {
@@ -224,7 +226,7 @@ function renderCurrentIssuePreview() {
         <h3>${escapeHtml(issue.title)}</h3>
         ${issue.isCurrent ? '<span class="admin-pill">Current</span>' : ''}
       </div>
-      <div class="admin-issue-meta">${escapeHtml(issue.slug)} · ${escapeHtml(issue.dateLabel || "")}</div>
+      <div class="admin-issue-meta">${escapeHtml(issue.slug)} · ${escapeHtml(issue.dateLabel || '')}</div>
       <div class="admin-current-links">
         <a href="/${issue.slug}/" target="_blank" rel="noopener noreferrer">Open issue page</a>
         ${issue.pdfUrl ? `<a href="${escapeHtml(issue.pdfUrl)}" target="_blank" rel="noopener noreferrer">Open PDF</a>` : ''}
@@ -237,42 +239,28 @@ async function probeApiStatus() {
   try {
     const data = await api("/");
     apiWritable = !!data.ok;
-    setStatus("Loaded current site data. Saving changes will publish through the admin API.");
+    setStatus("Site data loaded. The admin API is connected and ready to save changes.", "success");
   } catch {
     apiWritable = false;
-    setStatus("Loaded current site data. Saving is unavailable until the admin Worker is redeployed.", true);
+    setStatus("Site data loaded. The editor is working, but saving will fail until the admin Worker is deployed correctly.", "error");
   }
 }
 
-async function refreshIssues(showLoadedMessage = false) {
-  const summaries = await loadIssueSummariesStatic();
-  const detailedIssues = await Promise.all((summaries || []).map(async (summary) => {
-    const detail = await loadIssueDetailsStatic(summary.slug);
-    return {
-      ...summary,
-      ...detail,
-      isCurrent: !!summary.isCurrent,
-      pdfUrl: detail?.pdfUrl || summary.pdfUrl || "",
-      articles: (detail?.articles || []).map((article) => ({ ...article, issueSlug: summary.slug }))
-    };
-  }));
-
-  issuesCache = detailedIssues;
+function populateFromBootstrap() {
+  issuesCache = bootstrapIssues.map(normalizeBootstrapIssue);
   const issueLabel = (issue) => `${issue.title}${issue.isCurrent ? " (current)" : ""}`;
-  for (const select of [issueSelect, currentIssueSelect, editIssueSelect]) {
+  [issueSelect, currentIssueSelect, editIssueSelect].forEach((select) => {
     fillSelect(select, issuesCache, (issue) => issue.slug, issueLabel);
-  }
-  if (currentIssueSelect?.value) currentIssueSelect.dispatchEvent(new Event("change"));
-  await refreshEditArticles();
-  renderOverview();
+  });
+  if (!currentIssueSelect.value && issuesCache.length) currentIssueSelect.value = issuesCache.find((i) => i.isCurrent)?.slug || issuesCache[0].slug;
+  if (!editIssueSelect.value && issuesCache.length) editIssueSelect.value = issuesCache[0].slug;
+  refreshEditArticles();
   renderCurrentIssuePreview();
-
-  if (showLoadedMessage) {
-    setStatus(apiWritable ? "Refreshed current site data. Saves go through the admin API." : "Refreshed current site data. Saving is unavailable until the admin Worker is redeployed.", !apiWritable);
-  }
+  renderCreatePreview();
+  renderEditPreview();
 }
 
-async function refreshEditArticles() {
+function refreshEditArticles() {
   const issueSlug = editIssueSelect?.value;
   const issue = issueFromCache(issueSlug);
   const articles = issue?.articles || [];
@@ -290,6 +278,18 @@ issueSlugInput?.addEventListener("input", () => {
   issueSlugInput.dataset.manual = issueSlugInput.value.trim() ? "1" : "";
 });
 
+articleForm?.addEventListener("input", renderCreatePreview);
+articleForm?.addEventListener("change", renderCreatePreview);
+editArticleForm?.addEventListener("input", renderEditPreview);
+editArticleForm?.addEventListener("change", renderEditPreview);
+currentIssueSelect?.addEventListener("change", renderCurrentIssuePreview);
+editIssueSelect?.addEventListener("change", () => {
+  refreshEditArticles();
+  editArticleForm.hidden = true;
+  loadedArticleKey = "";
+  renderEditPreview();
+});
+
 issueForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
   try {
@@ -303,15 +303,16 @@ issueForm?.addEventListener("submit", async (e) => {
       title: fd.get("title"),
       slug,
       dateLabel: fd.get("dateLabel"),
+      pdfUrl: fd.get("pdfUrl"),
       isCurrent: fd.get("isCurrent") === "on",
       coverBase64: await fileToBase64(cover),
       coverExtension: cover.name.split(".").pop()?.toLowerCase() || "jpg"
     });
+    setStatus("Issue created. Wait for the site redeploy, then refresh the site.", "success");
     issueForm.reset();
     if (issueSlugInput) issueSlugInput.dataset.manual = "";
-    setStatus("Issue created. Wait for the site redeploy, then click Refresh.");
   } catch (err) {
-    setStatus(err.message, true);
+    setStatus(err.message, "error");
   }
 });
 
@@ -342,19 +343,13 @@ articleForm?.addEventListener("submit", async (e) => {
       payload.heroExtension = hero.name.split(".").pop()?.toLowerCase() || "jpg";
     }
     await api("/api/articles", "POST", payload);
+    setStatus("Article created. Wait for the site redeploy, then refresh the site.", "success");
     articleForm.reset();
-    setStatus("Article created. Wait for the site redeploy, then click Refresh.");
+    renderCreatePreview();
   } catch (err) {
-    setStatus(err.message, true);
+    setStatus(err.message, "error");
   }
 });
-
-editIssueSelect?.addEventListener("change", async () => {
-  await refreshEditArticles();
-  editArticleForm.hidden = true;
-});
-
-currentIssueSelect?.addEventListener("change", renderCurrentIssuePreview);
 
 editLoadForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -363,7 +358,6 @@ editLoadForm?.addEventListener("submit", async (e) => {
     const articleSlug = editArticleSelect.value;
     const article = articleFromCache(issueSlug, articleSlug);
     if (!article) throw new Error("Article not found.");
-    const bodyText = await loadArticleBody(issueSlug, articleSlug);
     loadedArticleKey = `${issueSlug}/${articleSlug}`;
     setFormValue(editArticleForm, "slug", article.slug);
     setFormValue(editArticleForm, "title", article.title);
@@ -376,11 +370,12 @@ editLoadForm?.addEventListener("submit", async (e) => {
     setFormValue(editArticleForm, "frontPageSlot", article.frontPageSlot || "none");
     setFormValue(editArticleForm, "imageCaption", article.imageCaption || "");
     setFormValue(editArticleForm, "citationsText", article.citationsText || "");
-    setFormValue(editArticleForm, "bodyText", bodyText || "");
+    setFormValue(editArticleForm, "bodyText", article.bodyText || "");
     editArticleForm.hidden = false;
-    setStatus(`Loaded article: ${article.title}`);
+    renderEditPreview();
+    setStatus(`Loaded article: ${article.title}`, "success");
   } catch (err) {
-    setStatus(err.message, true);
+    setStatus(err.message, "error");
   }
 });
 
@@ -389,9 +384,7 @@ editArticleForm?.addEventListener("submit", async (e) => {
   try {
     const issueSlug = editIssueSelect.value;
     const articleSlug = editArticleSelect.value;
-    if (!loadedArticleKey || loadedArticleKey !== `${issueSlug}/${articleSlug}`) {
-      throw new Error("Please load the article before saving changes.");
-    }
+    if (!loadedArticleKey || loadedArticleKey !== `${issueSlug}/${articleSlug}`) throw new Error("Please load the article before saving changes.");
     setStatus("Saving article changes…");
     const fd = new FormData(editArticleForm);
     const hero = fd.get("hero");
@@ -416,9 +409,9 @@ editArticleForm?.addEventListener("submit", async (e) => {
       payload.heroExtension = hero.name.split(".").pop()?.toLowerCase() || "jpg";
     }
     await api("/api/articles", "PATCH", payload);
-    setStatus("Article updated. Wait for the site redeploy, then click Refresh.");
+    setStatus("Article updated. Wait for the site redeploy, then refresh the site.", "success");
   } catch (err) {
-    setStatus(err.message, true);
+    setStatus(err.message, "error");
   }
 });
 
@@ -428,21 +421,21 @@ currentForm?.addEventListener("submit", async (e) => {
     setStatus("Updating current issue…");
     const fd = new FormData(currentForm);
     await api("/api/issues/current", "POST", { slug: fd.get("currentSlug") });
-    setStatus("Current issue updated. Wait for the site redeploy, then click Refresh.");
+    setStatus("Current issue updated. Wait for the site redeploy, then refresh the site.", "success");
   } catch (err) {
-    setStatus(err.message, true);
+    setStatus(err.message, "error");
   }
 });
 
-async function init(manualRefresh = false) {
+function init() {
   adminApp.hidden = false;
-  if (!manualRefresh) setStatus("Loading current site data…");
-  await refreshIssues(manualRefresh);
+  populateFromBootstrap();
+  if (!issuesCache.length) {
+    setStatus("No issue data was found in the published site bundle.", "error");
+  } else {
+    setStatus("Site data loaded from the current published content.");
+  }
   probeApiStatus();
 }
 
-init().catch((err) => {
-  adminApp.hidden = false;
-  setStatus(err.message, true);
-  console.error(err);
-});
+init();
