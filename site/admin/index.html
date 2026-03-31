@@ -20,6 +20,14 @@
         <div id="admin-status" class="admin-status">Loading…</div>
       </div>
 
+      <section class="admin-card admin-overview-card">
+        <div class="admin-overview-head">
+          <h2>Current Repository Content</h2>
+          <button type="button" id="refresh-admin-data">Refresh</button>
+        </div>
+        <div id="admin-overview" class="admin-overview-grid"></div>
+      </section>
+
       <div class="admin-tabs">
         <button class="admin-tab active" data-tab="issues-tab">Create Issue</button>
         <button class="admin-tab" data-tab="articles-tab">Create Article</button>
@@ -127,6 +135,7 @@
             <label>Current Issue <select id="current-issue-select" name="currentSlug" required></select></label>
             <button type="submit">Update Current Issue</button>
           </form>
+          <div id="current-issue-preview" class="admin-current-preview"></div>
         </div>
       </section>
     </section>

@@ -195,16 +195,17 @@ function safeExt(ext) {
 
 async function createIssue(env, body) {
   const { title, slug, dateLabel, isCurrent, coverBase64, coverExtension } = body;
-  if (!title || !slug || !dateLabel || !coverBase64) throw badRequest("Missing required issue fields.");
+  const finalSlug = slugifyValue(slug || title);
+  if (!title || !finalSlug || !dateLabel || !coverBase64) throw badRequest("Missing required issue fields.");
   const issues = await readJsonFromGitHub(env, "site/assets/data/issues.json");
-  if (issues.some((x) => x.slug === slug)) throw badRequest(`Issue slug already exists: ${slug}`);
+  if (issues.some((x) => x.slug === finalSlug)) throw badRequest(`Issue slug already exists: ${finalSlug}`);
   if (isCurrent) issues.forEach((x) => { x.isCurrent = false; });
   const coverFilename = `cover.${safeExt(coverExtension)}`;
-  issues.unshift({ slug, title, dateLabel, coverImage: `${slug}/${coverFilename}`, pdfUrl: `${slug}/magazine.pdf`, isCurrent: !!isCurrent });
-  const issueJson = { slug, title, dateLabel, coverFilename, pdfUrl: `${slug}/magazine.pdf`, articles: [] };
-  await writeFileToGitHub(env, `site/content/${slug}/issue.json`, b64FromUtf8(JSON.stringify(issueJson, null, 2)), `Create issue metadata for ${slug}`);
-  await writeFileToGitHub(env, `site/content/${slug}/${coverFilename}`, coverBase64, `Upload cover image for ${slug}`);
-  await writeFileToGitHub(env, "site/assets/data/issues.json", b64FromUtf8(JSON.stringify(issues, null, 2)), `Update issues list for ${slug}`);
+  issues.unshift({ slug: finalSlug, title, dateLabel, coverImage: `${finalSlug}/${coverFilename}`, pdfUrl: `${finalSlug}/magazine.pdf`, isCurrent: !!isCurrent });
+  const issueJson = { slug: finalSlug, title, dateLabel, coverFilename, pdfUrl: `${finalSlug}/magazine.pdf`, articles: [] };
+  await writeFileToGitHub(env, `site/content/${finalSlug}/issue.json`, b64FromUtf8(JSON.stringify(issueJson, null, 2)), `Create issue metadata for ${finalSlug}`);
+  await writeFileToGitHub(env, `site/content/${finalSlug}/${coverFilename}`, coverBase64, `Upload cover image for ${finalSlug}`);
+  await writeFileToGitHub(env, "site/assets/data/issues.json", b64FromUtf8(JSON.stringify(issues, null, 2)), `Update issues list for ${finalSlug}`);
 }
 
 async function setCurrentIssue(env, slug) {
