@@ -1,5 +1,5 @@
 
-const API_BASE = window.__CACTUS_API_BASE__ || "https://api.YOUR-DOMAIN.com";
+const API_BASE = window.__CACTUS_API_BASE__ || "https://the-cactus-admin-api.thecactusphsweb.workers.dev";
 
 const loginCard = document.getElementById("login-card");
 const adminApp = document.getElementById("admin-app");
