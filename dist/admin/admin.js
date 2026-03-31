@@ -1,11 +1,6 @@
-
 const API_BASE = window.__CACTUS_API_BASE__ || "https://the-cactus-admin-api.thecactusphsweb.workers.dev";
 
-const loginCard = document.getElementById("login-card");
 const adminApp = document.getElementById("admin-app");
-const loginForm = document.getElementById("login-form");
-const loginStatus = document.getElementById("login-status");
-const logoutButton = document.getElementById("logout-button");
 const statusEl = document.getElementById("admin-status");
 
 const issueForm = document.getElementById("issue-form");
@@ -13,15 +8,15 @@ const articleForm = document.getElementById("article-form");
 const currentForm = document.getElementById("current-form");
 const issueSelect = document.getElementById("issue-select");
 const currentIssueSelect = document.getElementById("current-issue-select");
+const editIssueSelect = document.getElementById("edit-issue-select");
+const editArticleSelect = document.getElementById("edit-article-select");
+const editLoadForm = document.getElementById("edit-load-form");
+const editArticleForm = document.getElementById("edit-article-form");
 
 const tabs = document.querySelectorAll(".admin-tab[data-tab]");
 const panels = document.querySelectorAll(".admin-tab-panel");
-
-function setLoginStatus(message, isError = false) {
-  loginStatus.hidden = false;
-  loginStatus.textContent = message;
-  loginStatus.style.color = isError ? "#9b1c1c" : "";
-}
+let issuesCache = [];
+let loadedArticleKey = "";
 
 function setStatus(message, isError = false) {
   if (!statusEl) return;
@@ -53,7 +48,7 @@ function slugify(text) {
   return String(text || "")
     .toLowerCase()
     .trim()
-    .replace(/['’"]/g, "")
+    .replace(/["'’]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
@@ -66,51 +61,45 @@ async function fileToBase64(file) {
   return btoa(binary);
 }
 
-async function checkSession() {
-  try {
-    await api("/api/admin/session");
-    loginCard.hidden = true;
-    adminApp.hidden = false;
-    await refreshIssues();
-    setStatus("Signed in.");
-  } catch {
-    loginCard.hidden = false;
-    adminApp.hidden = true;
-  }
+function fillSelect(select, items, getValue, getLabel) {
+  select.innerHTML = "";
+  items.forEach((item) => {
+    const opt = document.createElement("option");
+    opt.value = getValue(item);
+    opt.textContent = getLabel(item);
+    select.appendChild(opt);
+  });
 }
 
 async function refreshIssues() {
   const data = await api("/api/issues");
-  const issues = data.issues || [];
-  for (const select of [issueSelect, currentIssueSelect]) {
-    select.innerHTML = "";
-    issues.forEach((issue) => {
-      const opt = document.createElement("option");
-      opt.value = issue.slug;
-      opt.textContent = `${issue.title}${issue.isCurrent ? " (current)" : ""}`;
-      select.appendChild(opt);
-    });
+  issuesCache = data.issues || [];
+  const issueLabel = (issue) => `${issue.title}${issue.isCurrent ? " (current)" : ""}`;
+  for (const select of [issueSelect, currentIssueSelect, editIssueSelect]) {
+    fillSelect(select, issuesCache, (issue) => issue.slug, issueLabel);
   }
+  await refreshEditArticles();
 }
 
-loginForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const fd = new FormData(loginForm);
-  try {
-    await api("/api/admin/login", "POST", { password: fd.get("password") });
-    loginForm.reset();
-    await checkSession();
-  } catch (err) {
-    setLoginStatus(err.message, true);
+async function refreshEditArticles() {
+  const issueSlug = editIssueSelect.value;
+  if (!issueSlug) {
+    editArticleSelect.innerHTML = "";
+    return;
   }
-});
+  const data = await api(`/api/issues/${encodeURIComponent(issueSlug)}`);
+  const articles = data.issue?.articles || [];
+  fillSelect(editArticleSelect, articles, (article) => article.slug, (article) => article.title);
+}
 
-logoutButton?.addEventListener("click", async () => {
-  try {
-    await api("/api/admin/logout", "POST");
-  } catch {}
-  location.reload();
-});
+function issueFromCache(slug) {
+  return issuesCache.find((issue) => issue.slug === slug);
+}
+
+function setFormValue(form, name, value) {
+  const field = form.elements.namedItem(name);
+  if (field) field.value = value ?? "";
+}
 
 issueForm?.querySelector('input[name="title"]')?.addEventListener("input", (e) => {
   const slugInput = issueForm.querySelector('input[name="slug"]');
@@ -135,7 +124,7 @@ issueForm?.addEventListener("submit", async (e) => {
     });
     issueForm.reset();
     await refreshIssues();
-    setStatus("Issue created.");
+    setStatus("Issue created. GitHub should redeploy the site automatically.");
   } catch (err) {
     setStatus(err.message, true);
   }
@@ -169,7 +158,86 @@ articleForm?.addEventListener("submit", async (e) => {
     }
     await api("/api/articles", "POST", payload);
     articleForm.reset();
-    setStatus("Article created.");
+    await refreshIssues();
+    setStatus("Article created. GitHub should redeploy the site automatically.");
+  } catch (err) {
+    setStatus(err.message, true);
+  }
+});
+
+editIssueSelect?.addEventListener("change", async () => {
+  try {
+    await refreshEditArticles();
+    editArticleForm.hidden = true;
+  } catch (err) {
+    setStatus(err.message, true);
+  }
+});
+
+editLoadForm?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    const issueSlug = editIssueSelect.value;
+    const articleSlug = editArticleSelect.value;
+    const data = await api(`/api/article?issueSlug=${encodeURIComponent(issueSlug)}&articleSlug=${encodeURIComponent(articleSlug)}`);
+    const article = data.article;
+    loadedArticleKey = `${issueSlug}/${articleSlug}`;
+    setFormValue(editArticleForm, "slug", article.slug);
+    setFormValue(editArticleForm, "title", article.title);
+    setFormValue(editArticleForm, "subtitle", article.subtitle || "");
+    setFormValue(editArticleForm, "author", article.author || "");
+    setFormValue(editArticleForm, "date", article.date || "");
+    setFormValue(editArticleForm, "category", article.category || "");
+    setFormValue(editArticleForm, "type", article.type || "Long Article");
+    setFormValue(editArticleForm, "tags", (article.tags || []).join(", "));
+    setFormValue(editArticleForm, "frontPageSlot", article.frontPageSlot || "none");
+    setFormValue(editArticleForm, "imageCaption", article.imageCaption || "");
+    setFormValue(editArticleForm, "citationsText", article.citationsText || "");
+    setFormValue(editArticleForm, "bodyText", article.bodyText || "");
+    editArticleForm.hidden = false;
+    setStatus(`Loaded article: ${article.title}`);
+  } catch (err) {
+    setStatus(err.message, true);
+  }
+});
+
+editArticleForm?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    const issueSlug = editIssueSelect.value;
+    const articleSlug = editArticleSelect.value;
+    if (!loadedArticleKey || loadedArticleKey !== `${issueSlug}/${articleSlug}`) {
+      throw new Error("Please load the article before saving changes.");
+    }
+    setStatus("Saving article changes…");
+    const fd = new FormData(editArticleForm);
+    const hero = fd.get("hero");
+    const payload = {
+      issueSlug,
+      articleSlug,
+      title: fd.get("title"),
+      subtitle: fd.get("subtitle"),
+      author: fd.get("author"),
+      date: fd.get("date"),
+      category: fd.get("category"),
+      type: fd.get("type"),
+      tags: String(fd.get("tags") || "").split(",").map((x) => x.trim()).filter(Boolean),
+      frontPageSlot: fd.get("frontPageSlot"),
+      featuredMain: fd.get("frontPageSlot") === "main",
+      imageCaption: fd.get("imageCaption"),
+      citationsText: fd.get("citationsText"),
+      bodyText: fd.get("bodyText")
+    };
+    if (hero instanceof File && hero.size) {
+      payload.heroBase64 = await fileToBase64(hero);
+      payload.heroExtension = hero.name.split(".").pop()?.toLowerCase() || "jpg";
+    }
+    await api("/api/articles", "PATCH", payload);
+    editArticleForm.reset();
+    editArticleForm.hidden = true;
+    await refreshIssues();
+    await refreshEditArticles();
+    setStatus("Article updated. GitHub should redeploy the site automatically.");
   } catch (err) {
     setStatus(err.message, true);
   }
@@ -188,4 +256,14 @@ currentForm?.addEventListener("submit", async (e) => {
   }
 });
 
-checkSession();
+async function init() {
+  adminApp.hidden = false;
+  await refreshIssues();
+  setStatus("Admin connected. Changes save directly to GitHub.");
+}
+
+init().catch((err) => {
+  adminApp.hidden = false;
+  setStatus(err.message, true);
+  console.error(err);
+});
