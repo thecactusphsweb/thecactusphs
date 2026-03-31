@@ -5,6 +5,7 @@ const statusEl = document.getElementById("admin-status");
 const overviewEl = document.getElementById("admin-overview");
 const refreshButton = document.getElementById("refresh-admin-data");
 const currentIssuePreview = document.getElementById("current-issue-preview");
+const bootstrapEl = document.getElementById("admin-bootstrap");
 
 const issueForm = document.getElementById("issue-form");
 const articleForm = document.getElementById("article-form");
@@ -23,12 +24,20 @@ const issueSlugInput = issueForm?.querySelector('input[name="slug"]');
 
 let issuesCache = [];
 let loadedArticleKey = "";
-let apiWritable = true;
+let apiWritable = false;
+let bootstrapIssues = [];
+
+try {
+  bootstrapIssues = JSON.parse(bootstrapEl?.textContent || "[]");
+} catch {
+  bootstrapIssues = [];
+}
 
 function setStatus(message, isError = false) {
   if (!statusEl) return;
   statusEl.textContent = message;
-  statusEl.style.color = isError ? "#9b1c1c" : "";
+  statusEl.classList.toggle("is-error", isError);
+  statusEl.classList.toggle("is-success", !isError);
 }
 
 function switchTab(tabId) {
@@ -39,13 +48,23 @@ function switchTab(tabId) {
 tabs.forEach((btn) => btn.addEventListener("click", () => switchTab(btn.dataset.tab)));
 refreshButton?.addEventListener("click", () => init(true));
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function api(path, method = "GET", body = null) {
   const opts = { method, headers: {}, credentials: "include" };
   if (body) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(body);
   }
-  const res = await fetch(`${API_BASE}${path}`, opts);
+  const res = await fetchWithTimeout(`${API_BASE}${path}`, opts, 15000);
   const text = await res.text();
   let data = {};
   try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
@@ -54,13 +73,13 @@ async function api(path, method = "GET", body = null) {
 }
 
 async function fetchJson(path) {
-  const res = await fetch(path, { credentials: "same-origin" });
+  const res = await fetchWithTimeout(path, { credentials: "same-origin" }, 8000);
   if (!res.ok) throw new Error(`Static fetch failed: ${path}`);
   return res.json();
 }
 
 async function fetchText(path) {
-  const res = await fetch(path, { credentials: "same-origin" });
+  const res = await fetchWithTimeout(path, { credentials: "same-origin" }, 8000);
   if (!res.ok) throw new Error(`Static fetch failed: ${path}`);
   return res.text();
 }
@@ -81,13 +100,6 @@ function escapeHtml(text) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
-}
-
-function formatDateLabel(dateValue) {
-  if (!dateValue) return "";
-  const date = new Date(`${dateValue}T12:00:00`);
-  if (Number.isNaN(date.getTime())) return dateValue;
-  return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
 async function fileToBase64(file) {
@@ -131,31 +143,26 @@ function setFormValue(form, name, value) {
   if (field) field.value = value ?? "";
 }
 
-async function loadIssueSummaries() {
+async function loadIssueSummariesStatic() {
   try {
-    const data = await api("/api/issues");
-    apiWritable = true;
-    return data.issues || [];
+    return await fetchJson("/assets/data/issues.json");
   } catch {
-    apiWritable = false;
-    return fetchJson("/assets/data/issues.json");
+    return bootstrapIssues.map(({ slug, title, dateLabel, coverImage, pdfUrl, isCurrent }) => ({ slug, title, dateLabel, coverImage, pdfUrl, isCurrent }));
   }
 }
 
-async function loadIssueDetails(slug) {
+async function loadIssueDetailsStatic(slug) {
+  const boot = bootstrapIssues.find((issue) => issue.slug === slug);
   try {
-    const data = await api(`/api/issues/${encodeURIComponent(slug)}`);
-    return data.issue;
+    return await fetchJson(`/${slug}/issue.json`);
   } catch {
-    return fetchJson(`/${slug}/issue.json`);
+    if (boot) return boot;
+    throw new Error(`Unable to load issue details for ${slug}.`);
   }
 }
 
 async function loadArticleBody(issueSlug, articleSlug) {
   try {
-    const data = await api(`/api/article?issueSlug=${encodeURIComponent(issueSlug)}&articleSlug=${encodeURIComponent(articleSlug)}`);
-    return data.article?.bodyText || "";
-  } catch {
     const html = await fetchText(`/${issueSlug}/${articleSlug}/body.html`);
     return html
       .replace(/<\s*br\s*\/?>/gi, "\n")
@@ -170,6 +177,9 @@ async function loadArticleBody(issueSlug, articleSlug) {
       .replace(/&quot;/g, '"')
       .replace(/&#039;/g, "'")
       .trim();
+  } catch {
+    const article = articleFromCache(issueSlug, articleSlug);
+    return article?.bodyText || "";
   }
 }
 
@@ -223,16 +233,27 @@ function renderCurrentIssuePreview() {
     </div>`;
 }
 
+async function probeApiStatus() {
+  try {
+    const data = await api("/");
+    apiWritable = !!data.ok;
+    setStatus("Loaded current site data. Saving changes will publish through the admin API.");
+  } catch {
+    apiWritable = false;
+    setStatus("Loaded current site data. Saving is unavailable until the admin Worker is redeployed.", true);
+  }
+}
+
 async function refreshIssues(showLoadedMessage = false) {
-  const summaries = await loadIssueSummaries();
+  const summaries = await loadIssueSummariesStatic();
   const detailedIssues = await Promise.all((summaries || []).map(async (summary) => {
-    const detail = await loadIssueDetails(summary.slug);
+    const detail = await loadIssueDetailsStatic(summary.slug);
     return {
       ...summary,
       ...detail,
       isCurrent: !!summary.isCurrent,
       pdfUrl: detail?.pdfUrl || summary.pdfUrl || "",
-      articles: detail?.articles || []
+      articles: (detail?.articles || []).map((article) => ({ ...article, issueSlug: summary.slug }))
     };
   }));
 
@@ -247,7 +268,7 @@ async function refreshIssues(showLoadedMessage = false) {
   renderCurrentIssuePreview();
 
   if (showLoadedMessage) {
-    setStatus(apiWritable ? "Admin connected. Changes save directly to GitHub." : "Loaded current site data. Saving still requires the admin Worker.");
+    setStatus(apiWritable ? "Refreshed current site data. Saves go through the admin API." : "Refreshed current site data. Saving is unavailable until the admin Worker is redeployed.", !apiWritable);
   }
 }
 
@@ -288,8 +309,7 @@ issueForm?.addEventListener("submit", async (e) => {
     });
     issueForm.reset();
     if (issueSlugInput) issueSlugInput.dataset.manual = "";
-    await refreshIssues(true);
-    setStatus("Issue created. GitHub should redeploy the site automatically.");
+    setStatus("Issue created. Wait for the site redeploy, then click Refresh.");
   } catch (err) {
     setStatus(err.message, true);
   }
@@ -323,8 +343,7 @@ articleForm?.addEventListener("submit", async (e) => {
     }
     await api("/api/articles", "POST", payload);
     articleForm.reset();
-    await refreshIssues(true);
-    setStatus("Article created. GitHub should redeploy the site automatically.");
+    setStatus("Article created. Wait for the site redeploy, then click Refresh.");
   } catch (err) {
     setStatus(err.message, true);
   }
@@ -397,11 +416,7 @@ editArticleForm?.addEventListener("submit", async (e) => {
       payload.heroExtension = hero.name.split(".").pop()?.toLowerCase() || "jpg";
     }
     await api("/api/articles", "PATCH", payload);
-    editArticleForm.reset();
-    editArticleForm.hidden = true;
-    loadedArticleKey = "";
-    await refreshIssues(true);
-    setStatus("Article updated. GitHub should redeploy the site automatically.");
+    setStatus("Article updated. Wait for the site redeploy, then click Refresh.");
   } catch (err) {
     setStatus(err.message, true);
   }
@@ -413,8 +428,7 @@ currentForm?.addEventListener("submit", async (e) => {
     setStatus("Updating current issue…");
     const fd = new FormData(currentForm);
     await api("/api/issues/current", "POST", { slug: fd.get("currentSlug") });
-    await refreshIssues(true);
-    setStatus("Current issue updated.");
+    setStatus("Current issue updated. Wait for the site redeploy, then click Refresh.");
   } catch (err) {
     setStatus(err.message, true);
   }
@@ -422,8 +436,9 @@ currentForm?.addEventListener("submit", async (e) => {
 
 async function init(manualRefresh = false) {
   adminApp.hidden = false;
-  await refreshIssues(!manualRefresh);
-  if (manualRefresh) setStatus(apiWritable ? "Refreshed from admin API." : "Refreshed from site data. Saving still requires the admin Worker.");
+  if (!manualRefresh) setStatus("Loading current site data…");
+  await refreshIssues(manualRefresh);
+  probeApiStatus();
 }
 
 init().catch((err) => {

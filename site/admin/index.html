@@ -11,18 +11,22 @@
   <link rel="stylesheet" href="/assets/css/admin.css" />
 </head>
 <body data-page="admin" data-nav="admin">
-  <div id="header-mount"></div>
   <main class="site-main container admin-shell">
     <section id="admin-app">
       <div class="admin-header">
-        <h1>The Cactus Admin</h1>
-        <p class="muted">Create issues, create articles, edit existing articles, and set the current issue.</p>
-        <div id="admin-status" class="admin-status">Loading…</div>
+        <div>
+          <h1>The Cactus Admin</h1>
+          <p class="muted">Create issues, create articles, edit current articles, and choose the current issue.</p>
+        </div>
+        <div id="admin-status" class="admin-status">Loading current site data…</div>
       </div>
 
       <section class="admin-card admin-overview-card">
         <div class="admin-overview-head">
-          <h2>Current Repository Content</h2>
+          <div>
+            <h2>Current Repository Content</h2>
+            <p class="muted">This comes from the published site, so your existing issue, articles, and PDF should appear here immediately.</p>
+          </div>
           <button type="button" id="refresh-admin-data">Refresh</button>
         </div>
         <div id="admin-overview" class="admin-overview-grid"></div>
@@ -38,13 +42,13 @@
       <section id="issues-tab" class="admin-tab-panel active">
         <div class="admin-card">
           <h2>Create Issue</h2>
-          <form id="issue-form">
-            <label>Issue Title <input name="title" required></label>
+          <form id="issue-form" class="admin-form-grid">
+            <label class="span-2">Issue Title <input name="title" required></label>
             <label>Issue Slug <input name="slug" required></label>
             <label>Date Label <input name="dateLabel" placeholder="January 7, 2026" required></label>
-            <label>Cover Image <input type="file" name="cover" accept="image/*" required></label>
-            <label class="checkbox-row"><input type="checkbox" name="isCurrent"> Set as current issue</label>
-            <button type="submit">Create Issue</button>
+            <label class="span-2">Cover Image <input type="file" name="cover" accept="image/*" required></label>
+            <label class="checkbox-row span-2"><input type="checkbox" name="isCurrent"> Set as current issue</label>
+            <div class="span-2 admin-actions-row"><button type="submit">Create Issue</button></div>
           </form>
         </div>
       </section>
@@ -52,11 +56,11 @@
       <section id="articles-tab" class="admin-tab-panel">
         <div class="admin-card">
           <h2>Create Article</h2>
-          <form id="article-form">
+          <form id="article-form" class="admin-form-grid">
             <label>Issue <select id="issue-select" name="issueSlug" required></select></label>
-            <label>Title <input name="title" required></label>
-            <label>Subtitle <input name="subtitle"></label>
             <label>Author <input name="author" required></label>
+            <label class="span-2">Title <input name="title" required></label>
+            <label class="span-2">Subtitle <input name="subtitle"></label>
             <label>Date <input name="date" type="date" required></label>
             <label>Category <input name="category"></label>
             <label>Type
@@ -67,7 +71,6 @@
                 <option>Other</option>
               </select>
             </label>
-            <label>Tags <input name="tags" placeholder="engineering, physics"></label>
             <label>Front Page Slot
               <select name="frontPageSlot">
                 <option value="none">None</option>
@@ -77,11 +80,12 @@
                 <option value="right">Right</option>
               </select>
             </label>
-            <label>Hero Image <input type="file" name="hero" accept="image/*"></label>
-            <label>Image Caption <input name="imageCaption"></label>
-            <label>Body <textarea name="bodyText" rows="12" required></textarea></label>
-            <label>Citations <textarea name="citationsText" rows="8"></textarea></label>
-            <button type="submit">Create Article</button>
+            <label class="span-2">Tags <input name="tags" placeholder="engineering, physics"></label>
+            <label class="span-2">Hero Image <input type="file" name="hero" accept="image/*"></label>
+            <label class="span-2">Image Caption <input name="imageCaption"></label>
+            <label class="span-2">Body <textarea name="bodyText" rows="14" required></textarea></label>
+            <label class="span-2">Citations <textarea name="citationsText" rows="8"></textarea></label>
+            <div class="span-2 admin-actions-row"><button type="submit">Create Article</button></div>
           </form>
         </div>
       </section>
@@ -89,16 +93,16 @@
       <section id="edit-tab" class="admin-tab-panel">
         <div class="admin-card">
           <h2>Edit Article</h2>
-          <form id="edit-load-form" class="admin-subform">
+          <form id="edit-load-form" class="admin-form-grid admin-subform">
             <label>Issue <select id="edit-issue-select" name="issueSlug" required></select></label>
             <label>Article <select id="edit-article-select" name="articleSlug" required></select></label>
-            <button type="submit">Load Article</button>
+            <div class="span-2 admin-actions-row"><button type="submit">Load Article</button></div>
           </form>
-          <form id="edit-article-form" hidden>
+          <form id="edit-article-form" class="admin-form-grid" hidden>
             <label>Slug <input name="slug" readonly></label>
-            <label>Title <input name="title" required></label>
-            <label>Subtitle <input name="subtitle"></label>
             <label>Author <input name="author" required></label>
+            <label class="span-2">Title <input name="title" required></label>
+            <label class="span-2">Subtitle <input name="subtitle"></label>
             <label>Date <input name="date" type="date" required></label>
             <label>Category <input name="category"></label>
             <label>Type
@@ -109,7 +113,6 @@
                 <option>Other</option>
               </select>
             </label>
-            <label>Tags <input name="tags" placeholder="engineering, physics"></label>
             <label>Front Page Slot
               <select name="frontPageSlot">
                 <option value="none">None</option>
@@ -119,11 +122,12 @@
                 <option value="right">Right</option>
               </select>
             </label>
-            <label>Replace Hero Image <input type="file" name="hero" accept="image/*"></label>
-            <label>Image Caption <input name="imageCaption"></label>
-            <label>Body <textarea name="bodyText" rows="12" required></textarea></label>
-            <label>Citations <textarea name="citationsText" rows="8"></textarea></label>
-            <button type="submit">Save Article Changes</button>
+            <label class="span-2">Tags <input name="tags" placeholder="engineering, physics"></label>
+            <label class="span-2">Replace Hero Image <input type="file" name="hero" accept="image/*"></label>
+            <label class="span-2">Image Caption <input name="imageCaption"></label>
+            <label class="span-2">Body <textarea name="bodyText" rows="14" required></textarea></label>
+            <label class="span-2">Citations <textarea name="citationsText" rows="8"></textarea></label>
+            <div class="span-2 admin-actions-row"><button type="submit">Save Article Changes</button></div>
           </form>
         </div>
       </section>
@@ -131,16 +135,16 @@
       <section id="current-tab" class="admin-tab-panel">
         <div class="admin-card">
           <h2>Set Current Issue</h2>
-          <form id="current-form">
-            <label>Current Issue <select id="current-issue-select" name="currentSlug" required></select></label>
-            <button type="submit">Update Current Issue</button>
+          <form id="current-form" class="admin-form-grid">
+            <label class="span-2">Current Issue <select id="current-issue-select" name="currentSlug" required></select></label>
+            <div class="span-2 admin-actions-row"><button type="submit">Update Current Issue</button></div>
           </form>
           <div id="current-issue-preview" class="admin-current-preview"></div>
         </div>
       </section>
     </section>
   </main>
-  <div id="footer-mount"></div>
+  <script id="admin-bootstrap" type="application/json">[]</script>
   <script>window.__CACTUS_API_BASE__ = "https://the-cactus-admin-api.thecactusphsweb.workers.dev";</script>
   <script type="module" src="/admin/admin.js"></script>
 </body>

@@ -68,6 +68,48 @@ await fs.copyFile(path.join(siteDir, "assets/img/favicon.ico"), path.join(distDi
 await copyDir(path.join(siteDir, "admin"), path.join(distDir, "admin"));
 await copyDir(path.join(siteDir, "content"), distDir);
 
+const adminBootstrap = JSON.stringify(issues.map((issue) => ({
+  slug: issue.slug,
+  title: issue.title,
+  dateLabel: issue.dateLabel,
+  coverImage: issue.coverImage,
+  coverFilename: issue.coverFilename,
+  pdfUrl: issue.pdfUrl,
+  isCurrent: issue.isCurrent,
+  articles: (issue.articles || []).map((article) => ({
+    id: article.id,
+    slug: article.slug,
+    title: article.title,
+    subtitle: article.subtitle || "",
+    author: article.author || "",
+    date: article.date || "",
+    category: article.category || "",
+    type: article.type || "Long Article",
+    tags: article.tags || [],
+    frontPageSlot: article.frontPageSlot || "none",
+    imageCaption: article.imageCaption || "",
+    citationsText: article.citationsText || "",
+    bodyText: article.bodyHtml
+      ? article.bodyHtml
+          .replace(/<\s*br\s*\/?>/gi, "\n")
+          .replace(/<\/p>\s*<p>/gi, "\n\n")
+          .replace(/<\/p>/gi, "")
+          .replace(/<p>/gi, "")
+          .replace(/<[^>]+>/g, "")
+          .replace(/&nbsp;/g, " ")
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&quot;/g, '"')
+          .replace(/&#039;/g, "'")
+          .trim()
+      : ""
+  }))
+})), null, 2);
+const adminIndexPath = path.join(distDir, "admin/index.html");
+const adminIndexHtml = (await fs.readFile(adminIndexPath, "utf8")).replace("[]</script>", `${adminBootstrap}</script>`);
+await fs.writeFile(adminIndexPath, adminIndexHtml);
+
 const current = issues.find((i) => i.isCurrent) || issues[0];
 const currentIssueHref = current ? issueUrl(current.slug) : "/archive/";
 const currentArticles = current?.articles || [];
